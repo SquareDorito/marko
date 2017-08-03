@@ -1,7 +1,7 @@
 'use strict';
 
-var path = require('path');
-var getComponentFiles = require('./getComponentFiles');
+let path = require('path');
+let getComponentFiles = require('./getComponentFiles');
 
 const esprima = require('esprima');
 const escodegen = require('escodegen');
@@ -12,16 +12,16 @@ function handleStyleElement(styleEl, transformHelper) {
         return;
     }
 
-    var attrs = styleEl.attributes;
+    let attrs = styleEl.attributes;
 
-    var styleCode;
-    var lang = 'css';
+    let styleCode;
+    let lang = 'css';
 
-    var hasStyleBlock = false;
+    let hasStyleBlock = false;
 
-    for (var i=attrs.length-1; i>=0; i--) {
-        var attr = attrs[i];
-        var name = attr.name;
+    for (let i=attrs.length-1; i>=0; i--) {
+        let attr = attrs[i];
+        let name = attr.name;
         if (name.startsWith('{')) {
             hasStyleBlock = true;
 
@@ -47,7 +47,7 @@ function handleStyleElement(styleEl, transformHelper) {
     styleEl.setFlag(FLAG_COMPONENT_STYLE);
 
     if (styleCode) {
-        var context = transformHelper.context;
+        let context = transformHelper.context;
         context.addDependency({
             type: lang,
             code: styleCode,
@@ -95,15 +95,15 @@ function classToObject(cls, el, transformHelper) {
 
 function handleClassDeclaration(classEl, transformHelper) {
     let tree;
-    var wrappedSrc = '('+classEl.tagString+'\n)';
+    let wrappedSrc = '('+classEl.tagString+'\n)';
 
     try {
         tree = esprima.parse(wrappedSrc);
     } catch(err) {
-        var message = 'Unable to parse JavaScript for component class. ' + err;
+        let message = 'Unable to parse JavaScript for component class. ' + err;
 
         if (err.index != null) {
-            var errorIndex = err.index;
+            let errorIndex = err.index;
             // message += '\n' + err.description;
             if (errorIndex != null && errorIndex >= 0) {
                 transformHelper.context.addError({
@@ -132,7 +132,7 @@ function handleClassDeclaration(classEl, transformHelper) {
         return;
     }
 
-    var moduleInfo = {
+    let moduleInfo = {
         inlineId: componentVar,
         filename: transformHelper.filename,
         requirePath: './' + path.basename(transformHelper.filename)
@@ -148,15 +148,15 @@ function handleClassDeclaration(classEl, transformHelper) {
 }
 
 module.exports = function handleRootNodes() {
-    var context = this.context;
-    var builder = this.builder;
+    let context = this.context;
+    let builder = this.builder;
 
-    var componentFiles = getComponentFiles(context.filename);
+    let componentFiles = getComponentFiles(context.filename);
     if (!componentFiles) {
         return;
     }
 
-    var dirname = context.dirname;
+    let dirname = context.dirname;
 
     if (componentFiles.package) {
         context.addDependency('package: ./' + componentFiles.package);
@@ -187,18 +187,18 @@ module.exports = function handleRootNodes() {
         });
     }
 
-    var templateRoot = this.el;
+    let templateRoot = this.el;
 
-    var rootNodes = [];
-    var hasLegacyExplicitBind = false;
-    var hasIdCount = 0;
-    var nodeWithAssignedId;
-    var assignedId;
-    var transformHelper = this;
+    let rootNodes = [];
+    let hasLegacyExplicitBind = false;
+    let hasIdCount = 0;
+    let nodeWithAssignedId;
+    let assignedId;
+    let transformHelper = this;
 
     let walker = context.createWalker({
         enter(node) {
-            var tagName = node.tagName && node.tagName.toLowerCase();
+            let tagName = node.tagName && node.tagName.toLowerCase();
 
             if (node.type === 'TemplateRoot' || !node.type) {
                 // Don't worry about the TemplateRoot or an Container node
@@ -267,7 +267,7 @@ module.exports = function handleRootNodes() {
 
     transformHelper.setHasBoundComponentForTemplate();
 
-    var nextKey = 0;
+    let nextKey = 0;
 
     rootNodes.forEach((curNode, i) => {
         let id = curNode.getAttributeValue('id');
