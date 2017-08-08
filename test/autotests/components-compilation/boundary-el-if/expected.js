@@ -1,4 +1,3 @@
-// Compiled using markoc@4.4.21 - DO NOT EDIT
 "use strict";
 
 var marko_template = module.exports = require("marko/src/html").t(__filename),
@@ -8,7 +7,7 @@ var marko_template = module.exports = require("marko/src/html").t(__filename),
       ],
     components_helpers = require("marko/src/components/helpers"),
     marko_registerComponent = components_helpers.rc,
-    marko_componentType = marko_registerComponent("/marko-test$1.0.0/autotests/components-compilation/boundary-if-root/index.marko", function() {
+    marko_componentType = marko_registerComponent("/marko-test$1.0.0/autotests/components-compilation/boundary-el-if/index.marko", function() {
       return module.exports;
     }),
     marko_renderer = components_helpers.r,
@@ -19,12 +18,12 @@ var marko_template = module.exports = require("marko/src/html").t(__filename),
 function render(input, out, __component, component, state) {
   var data = input;
 
-  out.w("<wbr" +
+  out.w("<h1" +
     marko_attr("id", __component.id) +
-    "></wbr>");
+    "></h1>");
 
   if (input.someCondition) {
-    out.w("<div></div>");
+    out.w("<span></span>");
   }
 
   out.w("<!--$" +
@@ -44,7 +43,7 @@ marko_template.meta = {
     deps: [
       {
           type: "require",
-          path: "./index.marko"
+          path: "./"
         }
     ]
   };

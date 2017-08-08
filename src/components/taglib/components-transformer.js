@@ -56,9 +56,8 @@ module.exports = function transform(el, context) {
         return;
     }
 
-    if (el.isFlagSet('hasComponentBind') || el.hasAttribute('w-bind')) {
-        el.setFlag('hasComponentBind');
-        transformHelper.handleComponentBind();
+    if (el.hasAttribute('w-bind')) {
+        transformHelper.handleLegacyBind();
     }
 
     if (/* New preserve attributes */

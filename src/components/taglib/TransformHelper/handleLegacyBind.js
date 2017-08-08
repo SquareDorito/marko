@@ -1,6 +1,5 @@
 'use strict';
 const resolveFrom = require('resolve-from');
-const generateRegisterComponentCode = require('../util/generateRegisterComponentCode');
 
 function legacyGetDefaultComponentModule(dirname) {
     var filename;
@@ -47,14 +46,14 @@ function checkIsInnerBind(el) {
     return false;
 }
 
-module.exports = function handleComponentBind() {
+module.exports = function handleLegacyBind() {
     let el = this.el;
     let context = this.context;
     let builder = this.builder;
 
     let componentModule;
-    let rendererModulePath;
-    let rendererModule = this.getRendererModule();
+    let rendererModule;
+
     let isLegacyComponent = false;
 
     if (el.hasAttribute('w-bind')) {
@@ -117,54 +116,15 @@ module.exports = function handleComponentBind() {
                             true /* computed */)
                     ]));
         }
-    } else if (el.isFlagSet('hasComponentBind')) {
-        componentModule = this.getComponentModule();
-        rendererModulePath = this.getRendererModule();
-
-
-        if (context.isFlagSet('hasWidgetTypes')) {
-            context.addError('The <widget-types> tag is no longer supported. See: https://github.com/marko-js/marko/issues/514');
-        }
     } else {
         return;
     }
-
-    this.setHasBoundComponentForTemplate();
 
     let isInnerBind = checkIsInnerBind(el.parentNode);
 
     el.data.hasBoundComponent = true;
 
     // A component is bound to the el...
-
-    var componentProps = isInnerBind ? {} : this.getComponentProps();
-    let transformHelper = this;
-
-    var isSplit = false;
-
-    if ((rendererModule && rendererModule !== componentModule) ||
-        (!rendererModule && componentModule)) {
-        componentProps.split = isSplit = true;
-    }
-
-    if (componentModule) {
-        let componentTypeNode;
-        let dependencyModule = isLegacyComponent || isSplit ? componentModule : this.getTemplateModule();
-
-        if (dependencyModule.requirePath) {
-            context.addDependency({ type:'require', path: dependencyModule.requirePath });
-        }
-
-        if (isSplit) {
-            context.addDependency({ type:'require', path: context.markoModulePrefix + 'components' });
-        }
-
-        componentTypeNode = context.addStaticVar(
-            'marko_componentType',
-            generateRegisterComponentCode(componentModule, this, isSplit));
-
-        componentProps.type = componentTypeNode;
-    }
 
     if (el.hasAttribute('w-config')) {
         el.insertSiblingBefore(
@@ -176,6 +136,8 @@ module.exports = function handleComponentBind() {
 
         el.removeAttribute('w-config');
     }
+
+    let componentProps = {};
 
     let id = el.getAttributeValue('id');
 
@@ -189,7 +151,10 @@ module.exports = function handleComponentBind() {
         if (rendererModule.inlineId) {
             markoComponentVar = rendererModule.inlineId;
         } else {
-            markoComponentVar = context.addStaticVar('marko_component', builder.require(builder.literal(rendererModule.requirePath)));
+            markoComponentVar = context.addStaticVar(
+                'marko_component',
+                builder.require(
+                    builder.literal(rendererModule.requirePath)));
         }
     }
 
@@ -207,69 +172,10 @@ module.exports = function handleComponentBind() {
         return;
     }
 
-    if (this.firstBind) {
-
-        var rendererHelper = isLegacyComponent ?
-            transformHelper.context.helper('rendererLegacy') :
-            transformHelper.context.helper('renderer');
-
-        var defineComponentHelper;
-
-        if (!isSplit && !isLegacyComponent) {
-            defineComponentHelper = transformHelper.context.helper('defineComponent');
-        }
-
-        this.context.on('beforeGenerateCode:TemplateRoot', function(eventArgs) {
-            eventArgs.node.addRenderFunctionParam(builder.identifier('__component'));
-
-            if (isLegacyComponent) {
-                eventArgs.node.addRenderFunctionParam(builder.identifier('widget'));
-            } else {
-                eventArgs.node.addRenderFunctionParam(builder.identifier('component'));
-                eventArgs.node.addRenderFunctionParam(builder.identifier('state'));
-            }
-
-            eventArgs.node.generateAssignRenderCode = function(eventArgs) {
-                let nodes = [];
-                let templateVar = eventArgs.templateVar;
-                let templateRendererMember = eventArgs.templateRendererMember;
-                let renderFunctionVar = eventArgs.renderFunctionVar;
-
-                let createRendererArgs = [
-                    renderFunctionVar,
-                    builder.literal(componentProps)
-                ];
-
-                if (markoComponentVar) {
-                    createRendererArgs.push(markoComponentVar);
-                }
-
-                nodes.push(builder.assignment(
-                    templateRendererMember,
-                    builder.functionCall(
-                        rendererHelper,
-                        createRendererArgs)));
-
-                if (!isSplit && !isLegacyComponent) {
-                    nodes.push(builder.assignment(
-                        builder.memberExpression(templateVar, builder.identifier('Component')),
-                        builder.functionCall(
-                            defineComponentHelper,
-                            [
-                                markoComponentVar,
-                                templateRendererMember
-                            ])));
-                }
-
-                return nodes;
-            };
-        });
-    }
-
-    if (!el.hasAttribute('key') && !el.hasAttribute('ref') && !el.hasAttribute('id')) {
-        el.setAttributeValue('id',
-            builder.memberExpression(
-                builder.identifier('__component'),
-                builder.identifier('id')));
-    }
+    this.convertToComponent({
+      componentModule,
+      rendererModule,
+      isLegacyComponent: true,
+      rootNodes: [el]
+    });
 };

@@ -2,6 +2,10 @@
 
 var marko_template = module.exports = require("marko/src/html").t(__filename),
     marko_component = {},
+    marko_componentBoundary = [
+        "@",
+        "@$"
+      ],
     components_helpers = require("marko/src/components/helpers"),
     marko_registerComponent = components_helpers.rc,
     marko_componentType = marko_registerComponent("/marko-test$1.0.0/autotests/components-compilation/child-tag-no-output-multiple-roots/index.marko", function() {
@@ -21,22 +25,20 @@ function render(input, out, __component, component, state) {
   test_no_output_tag({}, out);
 
   out.w("<div" +
-    marko_attr("id", __component.elId("_r0")) +
+    marko_attr("id", __component.id) +
     ">" +
     marko_escapeXml(input.name) +
     "</div><div" +
-    marko_attr("id", __component.elId("_r1")) +
+    marko_attr("id", __component.elId("$")) +
     ">" +
     marko_escapeXml(input.address) +
     "</div>");
+
+  __component.boundary = marko_componentBoundary;
 }
 
 marko_template._ = marko_renderer(render, {
-    type: marko_componentType,
-    roots: [
-      "_r0",
-      "_r1"
-    ]
+    type: marko_componentType
   }, marko_component);
 
 marko_template.Component = marko_defineComponent(marko_component, marko_template._);

@@ -134,7 +134,8 @@
             {
                 "descriptionMoreURL": "http://markojs.com/docs/marko/language-guide/#macros"
             }
-        ]
+        ],
+        "no-output": true
     },
     "<macro-body>": {
         "code-generator": "./macro-body-tag",

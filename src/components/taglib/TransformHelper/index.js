@@ -27,22 +27,6 @@ class TransformHelper {
         this.context.data[HAS_COMPONENT_KEY] = true;
     }
 
-    setComponentModule(value) {
-        this.context.data.componentModule = value;
-    }
-
-    getComponentModule() {
-        return this.context.data.componentModule;
-    }
-
-    setRendererModule(value) {
-        this.context.data.rendererModule = value;
-    }
-
-    getRendererModule() {
-        return this.context.data.rendererModule;
-    }
-
     getTemplateModule() {
         return {
             requirePath:this.context.getRequirePath(this.filename)
@@ -53,15 +37,6 @@ class TransformHelper {
         return this.context.data.componentModule != null ||
             this.context.data[HAS_COMPONENT_KEY] ||
             this.context.data[WIDGET_PROPS_KEY] != null;
-    }
-
-    getComponentProps() {
-        var componentProps = this.context.data[WIDGET_PROPS_KEY];
-        if (!componentProps) {
-            this.firstBind = true;
-            componentProps = this.context.data[WIDGET_PROPS_KEY] = {};
-        }
-        return componentProps;
     }
 
     addError(message, code) {
@@ -150,12 +125,13 @@ class TransformHelper {
 }
 
 TransformHelper.prototype.assignComponentId = require('./assignComponentId');
+TransformHelper.prototype.convertToComponent = require('./convertToComponent');
 TransformHelper.prototype.handleRootNodes = require('./handleRootNodes');
 TransformHelper.prototype.handleIncludeNode = require('./handleIncludeNode');
 TransformHelper.prototype.handleComponentEvents = require('./handleComponentEvents');
 TransformHelper.prototype.handleComponentPreserve = require('./handleComponentPreserve');
 TransformHelper.prototype.handleComponentPreserveAttrs = require('./handleComponentPreserveAttrs');
-TransformHelper.prototype.handleComponentBind = require('./handleComponentBind');
 TransformHelper.prototype.handleComponentKeyAttrs = require('./handleComponentKeyAttrs');
+TransformHelper.prototype.handleLegacyBind = require('./handleLegacyBind');
 
 module.exports = TransformHelper;
