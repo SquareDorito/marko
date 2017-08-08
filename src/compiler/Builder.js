@@ -133,12 +133,13 @@ class Builder {
     concat(args) {
         var prev;
         let operator = '+';
+        args = Array.isArray(args) ? args : Array.prototype.slice.call(arguments, 0);
 
-        for (var i=1; i<arguments.length; i++) {
+        for (var i=1; i<args.length; i++) {
             var left;
-            var right = makeNode(arguments[i]);
+            var right = makeNode(args[i]);
             if (i === 1) {
-                left = makeNode(arguments[i-1]);
+                left = makeNode(args[i-1]);
             } else {
                 left = prev;
             }

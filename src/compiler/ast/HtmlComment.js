@@ -23,6 +23,10 @@ class HtmlComment extends Node {
         var comment = this.comment;
         var builder = codegen.builder;
 
+        if (Array.isArray(comment)) {
+            comment = builder.concat(comment);
+        }
+
         return builder.functionCall(
             builder.memberExpression(
                 builder.identifierOut(),

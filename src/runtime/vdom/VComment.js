@@ -10,7 +10,14 @@ VComment.prototype = {
     ___nodeType: 8,
 
     ___actualize: function(doc) {
-        return doc.createComment(this.___nodeValue);
+        var commentNode = doc.createComment(this.___nodeValue);
+        if (commentNode.isBoundary) {
+            // We need to index it
+        }
+
+        if (commentNode.value.startsWith('marko$')) {
+
+        }
     },
 
     ___cloneNode: function() {

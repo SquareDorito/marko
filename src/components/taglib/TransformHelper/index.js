@@ -129,11 +129,19 @@ class TransformHelper {
     buildComponentElIdFunctionCall(id) {
         var builder = this.builder;
 
-        var componentElId = builder.memberExpression(
-            builder.identifier('__component'),
-            builder.identifier('elId'));
+        if (id.type === 'Literal' && id.value === '') {
+            let componentElId = builder.memberExpression(
+                builder.identifier('__component'),
+                builder.identifier('id'));
 
-        return builder.functionCall(componentElId, arguments.length === 0 ? [] : [ id ]);
+            return componentElId;
+        } else {
+            let componentElId = builder.memberExpression(
+                builder.identifier('__component'),
+                builder.identifier('elId'));
+
+            return builder.functionCall(componentElId, arguments.length === 0 ? [] : [ id ]);
+        }
     }
 
     getTransformHelper(el) {

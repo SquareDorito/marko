@@ -93,6 +93,130 @@ function classToObject(cls, el, transformHelper) {
     };
 }
 
+const START = 'START';
+const END = 'END';
+
+function buildIdNodeFromKey(key, builder) {
+    const elIdMethod = builder.memberExpression(
+        builder.identifier('__component'),
+        builder.identifier('elId'));
+
+    return builder.functionCall(elIdMethod, [key]);
+}
+
+function getBoundaryForNode(node, pos, builder) {
+    const key = (node.type === 'HtmlElement' || node.type === 'CustomTag') && node.getAttributeValue('key');
+    const id = node.type === 'HtmlElement' && node.getAttributeValue('id');
+    const isKeyDynamic = key ? key.type !== 'Literal' : false;
+    const isIdDynamic = id ? id.type !== 'Literal' : false;
+    const isDynamic = isKeyDynamic || isIdDynamic;
+    let value;
+
+    if (isDynamic) {
+        const boundaryId = key ? buildIdNodeFromKey(key, builder) : id;
+        const idVarName = 'marko_componentBoundary' + (pos === START ? 'StartId' : 'EndId');
+        const idVar = builder.identifier(idVarName);
+
+        value = builder.concat(builder.literal('#'), idVar);
+
+        const idVarNode = isDynamic && builder.var(
+            idVar,
+            boundaryId);
+
+        node.removeAttribute('key');
+        node.removeAttribute('id');
+        node.setAttributeValue('id', idVar);
+        node.insertSiblingBefore(idVarNode);
+    } else {
+        if (node.type === 'CustomTag') {
+            if (key) {
+                value = builder.literal('C' + key.value);
+            }
+        } else {
+            if (key) {
+                value = builder.literal('@' + key.value);
+            } else if (id) {
+                value = builder.literal('#' + id.value);
+            } else {
+                const keyName = pos === START ? '' : '$';
+                node.setAttributeValue('key', builder.literal(keyName));
+                value = builder.literal('@' + keyName);
+            }
+        }
+    }
+
+    return {
+        isDynamic,
+        value
+    };
+}
+
+function checkHasId(startNode) {
+    if (startNode.type === 'HtmlElement') {
+        return true;
+    }
+
+    if (startNode.type === 'CustomTag' && startNode.hasAttribute('key')) {
+        return true;
+    }
+
+    return false;
+}
+
+function insertBoundaryNodes(rootNodes, context, builder) {
+    let firstNode = rootNodes[0];
+
+    if (firstNode.type === 'HtmlElement') {
+        const extraStartEl = builder.htmlElement('wbr');
+        firstNode.insertSiblingBefore(extraStartEl);
+        rootNodes.unshift(extraStartEl);
+        firstNode = extraStartEl;
+    }
+
+    firstNode.setFlag('hasComponentBind');
+
+    let lastNode = rootNodes[rootNodes.length - 1];
+    let isSingleRoot = rootNodes.length === 1;
+
+    let startBoundary = getBoundaryForNode(firstNode, START, builder);
+    let isDynamic = startBoundary.isDynamic;
+    let endBoundary;
+    let boundaryNode;
+
+    if (isSingleRoot) {
+        boundaryNode = startBoundary.value;
+
+        if (boundaryNode.type === 'Literal' && boundaryNode.value === '@') {
+            // The default boundary is a single element with an ID that matches
+            // the component ID so in this case there is no need to insert
+            // code to assign the boundary to the component def
+            return;
+        }
+    } else {
+        if (checkHasId(lastNode)) {
+            endBoundary = getBoundaryForNode(lastNode, END, builder);
+        } else {
+            const extraEnd = builder.htmlComment([
+                builder.literal('$'),
+                builder.memberExpression(builder.identifier('__component'), builder.identifier('id'))
+            ]);
+            lastNode.insertSiblingAfter(extraEnd);
+            rootNodes.push(extraEnd);
+            lastNode = extraEnd;
+        }
+
+        boundaryNode = builder.arrayExpression(endBoundary ? [startBoundary.value, endBoundary.value] : [startBoundary.value]);
+    }
+
+    if (!isDynamic) {
+        boundaryNode = context.addStaticVar('marko_componentBoundary', boundaryNode);
+    }
+
+    const lhs = builder.memberExpression(builder.identifier('__component'), builder.identifier('boundary'));
+    const assignment = builder.assignment(lhs, boundaryNode);
+    lastNode.insertSiblingAfter(assignment);
+}
+
 function handleClassDeclaration(classEl, transformHelper) {
     let tree;
     let wrappedSrc = '('+classEl.tagString+'\n)';
@@ -236,6 +360,8 @@ module.exports = function handleRootNodes() {
             } else {
                 if (tagName === 'class') {
                     handleClassDeclaration(node, transformHelper);
+                } else {
+                    rootNodes.push(node);
                 }
 
                 walker.skip();
@@ -255,34 +381,39 @@ module.exports = function handleRootNodes() {
         return;
     }
 
+    templateRoot._normalizeChildTextNodes(context, true);
+
+    rootNodes = rootNodes.filter((rootNode) => {
+        return rootNode.isDetached() !== true;
+    });
+
     if (rootNodes.length === 0) {
         return;
     }
 
-    if (rootNodes.length > 1 && hasIdCount > 0) {
-        // We can only bind a component to multiple top-level elements if we can assign
-        // all of the IDs
-        return;
-    }
+    insertBoundaryNodes(rootNodes, context, builder);
 
     transformHelper.setHasBoundComponentForTemplate();
 
-    let nextKey = 0;
 
-    rootNodes.forEach((curNode, i) => {
-        let id = curNode.getAttributeValue('id');
-
-        if (id && id.type !== 'Literal') {
-            context.addError('Root HTML element should not have a dynamic `id` attribute. See: https://github.com/marko-js/marko/wiki/Error:-Dynamic-root-HTML-element-id-attribute');
-            return;
-        }
-
-        curNode.setFlag('hasComponentBind');
-
-        if (!curNode.hasAttribute('key') && !curNode.hasAttribute('ref')) {
-            if (curNode.type === 'CustomTag' || rootNodes.length > 1) {
-                curNode.setAttributeValue('key', builder.literal('_r' + (nextKey++)));
-            }
-        }
-    });
+    // transformHelper.setHasBoundComponentForTemplate();
+    //
+    // let nextKey = 0;
+    //
+    // rootNodes.forEach((curNode, i) => {
+    //     let id = curNode.getAttributeValue('id');
+    //
+    //     if (id && id.type !== 'Literal') {
+    //         context.addError('Root HTML element should not have a dynamic `id` attribute. See: https://github.com/marko-js/marko/wiki/Error:-Dynamic-root-HTML-element-id-attribute');
+    //         return;
+    //     }
+    //
+    //     curNode.setFlag('hasComponentBind');
+    //
+    //     if (!curNode.hasAttribute('key') && !curNode.hasAttribute('ref')) {
+    //         if (curNode.type === 'CustomTag' || rootNodes.length > 1) {
+    //             curNode.setAttributeValue('key', builder.literal('_r' + (nextKey++)));
+    //         }
+    //     }
+    // });
 };

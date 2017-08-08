@@ -266,19 +266,7 @@ module.exports = function handleComponentBind() {
         });
     }
 
-    if (el.hasAttribute('key')) {
-        if (!componentProps.roots) {
-            componentProps.roots = [];
-        }
-        var key = el.getAttributeValue('key');
-        componentProps.roots.push(key);
-    } else if (el.hasAttribute('ref')) {
-        if (!componentProps.roots) {
-            componentProps.roots = [];
-        }
-        var ref = el.getAttributeValue('ref');
-        componentProps.roots.push(ref);
-    } else {
+    if (!el.hasAttribute('key') && !el.hasAttribute('ref') && !el.hasAttribute('id')) {
         el.setAttributeValue('id',
             builder.memberExpression(
                 builder.identifier('__component'),
