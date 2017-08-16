@@ -25,7 +25,7 @@ var marko_template = module.exports = require("marko/src/vdom").t(__filename),
 function render(input, out, __component, component, state) {
   var data = input;
 
-  out.e("H1", marko_attrs0, 0, 0, {
+  out.e("H1", marko_attrs0, 0, 16, {
       c: __component.id
     });
 

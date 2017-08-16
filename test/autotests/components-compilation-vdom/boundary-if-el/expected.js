@@ -35,7 +35,7 @@ function render(input, out, __component, component, state) {
 
   out.e("H1", {
       id: __component.elId("$")
-    }, 0, 20, {
+    }, 0, 36, {
       c: __component.id
     });
 

@@ -28,7 +28,7 @@ function render(input, out, __component, component, state) {
 
   out.e("H1", {
       id: __component.id
-    }, 0, 4, props);
+    }, 0, 20, props);
 
   if (input.someCondition) {
     out.n(marko_node0);

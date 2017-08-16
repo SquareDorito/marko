@@ -18,7 +18,7 @@ function render(input, out, __component, component, state) {
 
   out.e("DIV", {
       id: __component.id
-    }, 0, 20, props);
+    }, 0, 52, props);
 }
 
 marko_template._ = marko_renderer(render, {

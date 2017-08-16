@@ -21,7 +21,7 @@ function render(input, out, __component, component, state) {
 
   out.e("DIV", {
       id: __component.id
-    }, 0, 20, props);
+    }, 0, 52, props);
 
   test_no_output_tag({}, out);
 }

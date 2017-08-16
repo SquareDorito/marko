@@ -17,7 +17,7 @@ function render(input, out, __component, component, state) {
 
   out.e("H1", {
       id: marko_componentBoundaryStartId
-    }, 0, 4, {
+    }, 0, 20, {
       c: __component.id
     });
 
@@ -25,7 +25,7 @@ function render(input, out, __component, component, state) {
 
   out.e("DIV", {
       id: marko_componentBoundaryEndId
-    }, 0, 20, {
+    }, 0, 36, {
       c: __component.id
     });
 

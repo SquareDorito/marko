@@ -19,13 +19,13 @@ function render(input, out, __component, component, state) {
 
   out.e("H1", {
       id: __component.elId("myStart")
-    }, 0, 4, {
+    }, 0, 20, {
       c: __component.id
     });
 
   out.e("DIV", {
       id: __component.elId("myEnd")
-    }, 0, 20, {
+    }, 0, 36, {
       c: __component.id
     });
 

@@ -17,7 +17,7 @@ function render(input, out, __component, component, state) {
 
   out.e("DIV", {
       id: marko_componentBoundaryStartId
-    }, 0, 20, {
+    }, 0, 52, {
       c: __component.id
     });
 

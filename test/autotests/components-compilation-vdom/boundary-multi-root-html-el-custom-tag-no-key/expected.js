@@ -22,7 +22,7 @@ function render(input, out, __component, component, state) {
 
   out.e("H1", {
       id: marko_componentBoundaryStartId
-    }, 0, 4, {
+    }, 0, 20, {
       c: __component.id
     });
 
