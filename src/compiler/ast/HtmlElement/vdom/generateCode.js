@@ -38,6 +38,9 @@ module.exports = function(node, codegen, vdomUtil) {
     var attributes = codegen.generateCode(node.getAttributes());
     var properties = codegen.generateCode(node.getProperties());
     var dynamicAttributes = codegen.generateCode(node.dynamicAttributes);
+    var runtimeFlags = node.runtimeFlags;
+    var nextConstId = node.nextConstId;
+
     var builder = codegen.builder;
 
     var isAttrsStatic = checkAttributesStatic(attributes);
@@ -78,7 +81,9 @@ module.exports = function(node, codegen, vdomUtil) {
         isStatic,
         isAttrsStatic,
         isHtmlOnly,
-        dynamicAttributes
+        dynamicAttributes,
+        nextConstId,
+        runtimeFlags
     });
 
 

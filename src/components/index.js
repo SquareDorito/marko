@@ -82,7 +82,7 @@ function flattenHelper(components, flattened, typesArray, typesLookup) {
             d: componentDef.___domEvents,
             e: customEvents,
             p: customEvents && scope, // Only serialize scope if we need to attach custom events
-            r: componentDef.___roots,
+            r: componentDef.___boundary,
             s: state,
             u: undefinedPropNames,
             w: hasProps ? component : undefined,

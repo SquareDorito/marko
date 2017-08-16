@@ -9,6 +9,7 @@ window.$MG = markoGlobal;
 var runtimeId = markoGlobal.uid++;
 
 var componentLookup = {};
+var commentNodesLookup = {};
 
 var defaultDocument = document;
 var EMPTY_OBJECT = {};
@@ -17,7 +18,7 @@ function getComponentForEl(el, doc) {
     if (el) {
         var node = typeof el == 'string' ? (doc || defaultDocument).getElementById(el) : el;
         if (node) {
-            var component = node._w;
+            var component = node._c;
 
             while(component) {
                 var rootFor = component.___rootFor;
@@ -70,10 +71,10 @@ function emitLifecycleEvent(component, eventType, eventArg1, eventArg2) {
 }
 
 function destroyComponentForEl(el) {
-    var componentToDestroy = el._w;
+    var componentToDestroy = el._c;
     if (componentToDestroy) {
         componentToDestroy.___destroyShallow();
-        el._w = null;
+        el._c = null;
 
         while ((componentToDestroy = componentToDestroy.___rootFor)) {
             componentToDestroy.___rootFor = null;
@@ -149,6 +150,7 @@ function getMarkoPropsFromEl(el) {
 }
 
 exports.___runtimeId = runtimeId;
+exports.___commentNodeLookup = commentNodesLookup;
 exports.___componentLookup = componentLookup;
 exports.___getComponentForEl = getComponentForEl;
 exports.___emitLifecycleEvent = emitLifecycleEvent;

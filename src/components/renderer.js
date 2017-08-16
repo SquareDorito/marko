@@ -10,6 +10,7 @@ var copyProps = require('raptor-util/copyProps');
 var isServer = componentsUtil.___isServer === true;
 
 var COMPONENT_BEGIN_ASYNC_ADDED_KEY = '$wa';
+var PRESERVE_PROPS = { c: true };
 
 function resolveComponentKey(globalComponentsContext, key, scope) {
     if (key[0] == '#') {
@@ -28,18 +29,12 @@ function resolveComponentKey(globalComponentsContext, key, scope) {
 }
 
 function preserveComponentEls(existingComponent, out, globalComponentsContext) {
-    var rootEls = existingComponent.___getRootEls({});
+    var componentId = existingComponent.id;
 
-    for (var elId in rootEls) {
-        var el = rootEls[elId];
-
-        // We put a placeholder element in the output stream to ensure that the existing
-        // DOM node is matched up correctly when using morphdom.
-        out.element(el.tagName, { id: elId });
-
-        globalComponentsContext.___preserveDOMNode(elId); // Mark the element as being preserved (for morphdom)
-    }
-
+    // We put a placeholder element in the output stream to ensure that the existing
+    // DOM node is matched up correctly when using morphdom.
+    out.element('preserve', { id: componentId }, 0, 8 /* FLAG_PRESERVE */, PRESERVE_PROPS);
+    globalComponentsContext.___preserveComponent(existingComponent.id);
     existingComponent.___reset(); // The component is no longer dirty so reset internal flags
     return true;
 }

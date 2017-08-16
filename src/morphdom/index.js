@@ -1,5 +1,4 @@
 'use strict';
-var defaultDoc = typeof document == 'undefined' ? undefined : document;
 var specialElHandlers = require('./specialElHandlers');
 
 var morphAttrs = require('../runtime/vdom/VElement').___morphAttrs;
@@ -7,6 +6,9 @@ var morphAttrs = require('../runtime/vdom/VElement').___morphAttrs;
 var ELEMENT_NODE = 1;
 var TEXT_NODE = 3;
 var COMMENT_NODE = 8;
+
+const FLAG_COMPONENT_START_NODE = 16;
+const FLAG_COMPONENT_END_NODE = 32;
 
 function compareNodeNames(fromEl, toEl) {
     return fromEl.nodeName === toEl.___nodeName;
@@ -20,15 +22,13 @@ function getElementById(doc, id) {
 function morphdom(
         fromNode,
         toNode,
+        doc,
         context,
         onNodeAdded,
-        onBeforeElUpdated,
         onBeforeNodeDiscarded,
         onNodeDiscarded,
         onBeforeElChildrenUpdated
     ) {
-
-    var doc = fromNode.ownerDocument || defaultDoc;
 
     // This object is used as a lookup to quickly find all keyed elements in the original DOM tree.
     var removalList = [];
@@ -45,43 +45,46 @@ function morphdom(
     }
 
 
-    function addVirtualNode(vEl, parentEl) {
-        var realEl = vEl.___actualize(doc);
-
-        if (parentEl) {
-            parentEl.appendChild(realEl);
-        }
+    function insertVirtualNodeBefore(vNode, referenceEl, parentEl) {
+        var realEl = vNode.___actualize(doc);
+        parentEl.insertBefore(realEl, referenceEl);
 
         onNodeAdded(realEl, context);
 
-        var vCurChild = vEl.___firstChild;
+        var vCurChild = vNode.___firstChild;
         while (vCurChild) {
-            var realCurChild = null;
-
-            var key = vCurChild.id;
-            if (key) {
-                var unmatchedFromEl = getElementById(doc, key);
-                if (unmatchedFromEl && compareNodeNames(vCurChild, unmatchedFromEl)) {
-                    morphEl(unmatchedFromEl, vCurChild, false);
-                    realEl.appendChild(realCurChild = unmatchedFromEl);
-                }
-            }
-
-            if (!realCurChild) {
-                addVirtualNode(vCurChild, realEl);
+            if (vCurChild.___isPreservedComponent === true) {
+                var fromComponent = context.___existingComponentLookup[vCurChild.id];
+                fromComponent.appendTo(parentEl);
+            } else {
+                insertVirtualNodeBefore(vCurChild, null, parentEl);
             }
 
             vCurChild = vCurChild.___nextSibling;
         }
+    }
 
-        if (vEl.___nodeType === 1) {
-            var elHandler = specialElHandlers[vEl.nodeName];
-            if (elHandler !== undefined) {
-                elHandler(realEl, vEl);
+    function insertVirtualComponentBefore(vNode, componentId, referenceNode, referenceNodeParentEl) {
+        var curComponentId;
+
+        do {
+            insertVirtualNodeBefore(vNode, referenceNode, referenceNodeParentEl);
+            var nodeType = vNode.___nodeType;
+            if (nodeType === ELEMENT_NODE) {
+                curComponentId = (vNode.___flags & FLAG_COMPONENT_END_NODE) !== 0 && vNode.___properties.c;
+                if (curComponentId === true) {
+                    curComponentId = vNode.id;
+                }
+            } else if (nodeType === COMMENT_NODE) {
+                var commentValue = vNode.___nodeValue;
+                if (commentValue[0] === '$') {
+                    curComponentId = commentValue.substring(1);
+                }
             }
-        }
+            vNode = vNode.___nextSibling;
+        } while(curComponentId !== componentId);
 
-        return realEl;
+        return vNode;
     }
 
     function morphEl(fromEl, toEl, childrenOnly) {
@@ -98,12 +101,12 @@ function morphdom(
             var constId = toEl.___constId;
             if (constId !== undefined) {
                 var otherProps = fromEl._vprops;
-                if (otherProps !== undefined && constId === otherProps.c) {
+                if (otherProps !== undefined && constId === otherProps.i) {
                     return;
                 }
             }
 
-            if (onBeforeElUpdated(fromEl, toElKey, context) === true) {
+            if (context.___preserved[toElKey] === true) {
                 return;
             }
 
@@ -120,16 +123,114 @@ function morphdom(
             var curFromNodeChild = fromEl.firstChild;
             var curToNodeKey;
             var curFromNodeKey;
+            var curToNodeType;
 
             var fromNextSibling;
             var toNextSibling;
             var matchingFromEl;
+            var fromComponent;
+            var toComponent;
+            var toComponentId;
+            var isComponentPaired;
 
             outer: while (curToNodeChild) {
                 toNextSibling = curToNodeChild.___nextSibling;
                 curToNodeKey = curToNodeChild.id;
+                curToNodeType = curToNodeChild.___nodeType;
+                isComponentPaired = false;
+
+                if (curToNodeType === ELEMENT_NODE) {
+                    toComponentId = (curToNodeChild.___flags & FLAG_COMPONENT_START_NODE) !== 0 && curToNodeChild.___properties.c;
+                    if (toComponentId === true) {
+                        toComponentId = curToNodeChild.id;
+                    }
+                } else if (curToNodeType === COMMENT_NODE) {
+                    var commentValue = curToNodeChild.___nodeValue;
+                    if (commentValue[0] === '^') {
+                        toComponentId = commentValue.substring(1);
+                    }
+                }
+
+                if (toComponentId && (toComponent = context.___componentsById[toComponentId])) {
+                    // The target element is the start node for a UI component.
+                    // We take a look at the target node to see if it is also
+                    // associated with a UI component.
+                    if (curFromNodeChild) {
+                        fromComponent = context.___existingComponentLookup[toComponentId];
+                        if (fromComponent) {
+                            if (fromComponent.___type === toComponent.___type) {
+                                if (fromComponent.___startNode === curFromNodeChild) {
+                                    // The "to" component does not match the "from" component,
+                                    // but we found the matching from component elsewhere
+                                    // in the DOM so let's move into place, but we first
+                                    // make sure the types match
+                                    fromEl.insertBefore(fromComponent.___detach(), curFromNodeChild);
+                                    curFromNodeChild = fromComponent.___startNode;
+                                } else {
+                                    // Fall through to normal diffing/patching of the current component
+                                }
+
+                                isComponentPaired = true;
+                            } else {
+                                curToNodeChild = insertVirtualComponentBefore(curToNodeChild, toComponentId, curFromNodeChild, fromEl);
+                                fromComponent.destroy();
+                                continue;
+                            }
+                        } else {
+                            curToNodeChild = insertVirtualComponentBefore(curToNodeChild, toComponentId, curFromNodeChild, fromEl);
+                            continue;
+                        }
+                    }
+                } else if (curToNodeKey && curToNodeChild.___isPreservedComponent === true) {
+                    // We have found a marker that indicates that a component
+                    // at the current location in the target VDOM is to be
+                    // preserved. If the current DOM node in the original tree
+                    // happens to be the start boundary for the preserved UI
+                    // component then we just need to skip over those nodes.
+                    // If not, then we need to move the component's nodes into
+                    // this location
+                    curToNodeChild = toNextSibling; // Skip over the preserve marker
+
+                    fromComponent = context.___existingComponentLookup[curToNodeKey];
+
+                    if (fromComponent.___startNode === curFromNodeChild) {
+                        // Perfect match! Now just need to skip over all of the
+                        // nodes associated with the component. We have already
+                        // skipped over the target node
+                        curFromNodeChild = fromComponent.___endNode.nextSibling;
+                    } else {
+                        // We move the matching component's nodes into the proper
+                        // location
+                        fromEl.insertBefore(fromComponent.___detach(), curFromNodeChild);
+                    }
+                    continue;
+                }
 
                 while (curFromNodeChild) {
+                    if (!isComponentPaired && (fromComponent = curFromNodeChild._c)) {
+                        // The current "to" element is not associated with a component,
+                        // but the current "from" element is associated with a component
+
+                        // Even if we destroy the current component in the original
+                        // DOM or not, we still need to skip over it since it is
+                        // not compatible with the current "to" node
+                        curFromNodeChild = fromComponent.___endNode.nextSibling;
+
+                        if (context.___preservedComponents[fromComponent.id] ||
+                            ((toComponent = context.___componentsById[fromComponent.id]) && fromComponent.___type === toComponent.___type)) {
+                            // A compatible UI component was rendered to the VDOM so we will just
+                            // ignore this UI component in the original DOM by skipping
+                            // over its DOM nodes
+                            continue;
+                        } else {
+                            // Let's just destroy this component and remove it from the
+                            // original DOM since it is not in the rendered VDOM
+                            fromComponent.destroy();
+                        }
+
+                        continue; // Move to the next "from" node
+                    }
+
                     fromNextSibling = curFromNodeChild.nextSibling;
 
                     curFromNodeKey = curFromNodeChild.id;
@@ -138,7 +239,7 @@ function morphdom(
 
                     var isCompatible = undefined;
 
-                    if (curFromNodeType === curToNodeChild.___nodeType) {
+                    if (curFromNodeType === curToNodeType) {
                         if (curFromNodeType === ELEMENT_NODE) {
                             // Both nodes being compared are Element nodes
 
@@ -165,11 +266,8 @@ function morphdom(
                                             // NOTE: We use insertBefore instead of replaceChild because we want to go through
                                             // the `removeNode()` function for the node that is being discarded so that
                                             // all lifecycle hooks are correctly invoked
-
-
                                             fromEl.insertBefore(matchingFromEl, curFromNodeChild);
 
-                                            fromNextSibling = curFromNodeChild.nextSibling;
                                             removalList.push(curFromNodeChild);
 
                                             curFromNodeChild = matchingFromEl;
@@ -194,12 +292,20 @@ function morphdom(
                                 morphEl(curFromNodeChild, curToNodeChild, false);
                             }
 
-                        } else if (curFromNodeType === TEXT_NODE || curFromNodeType === COMMENT_NODE) {
+                        } else if (curFromNodeType === TEXT_NODE) {
                             // Both nodes being compared are Text or Comment nodes
                             isCompatible = true;
                             // Simply update nodeValue on the original node to
                             // change the text value
-                            curFromNodeChild.nodeValue = curToNodeChild.___nodeValue;
+                            if (curFromNodeChild.nodeValue !== curToNodeChild.___nodeValue) {
+                                curFromNodeChild.nodeValue = curToNodeChild.___nodeValue;
+                            }
+                        } else if (curFromNodeType === COMMENT_NODE) {
+                            // Both nodes being compared are comment nodes
+                            // We don't want to mutate comment nodes since we
+                            // attach metadata to them, including the component
+                            // that is bound to the comment node (if any)
+                            isCompatible = curFromNodeChild.nodeValue === curToNodeChild.___nodeValue;
                         }
                     }
 
@@ -210,12 +316,7 @@ function morphdom(
                         continue outer;
                     }
 
-                    // No compatible match so remove the old node from the DOM and continue trying to find a
-                    // match in the original DOM. However, we only do this if the from node is not keyed
-                    // since it is possible that a keyed node might match up with a node somewhere else in the
-                    // target tree and we don't want to discard it just yet since it still might find a
-                    // home in the final DOM tree. After everything is done we will remove any keyed nodes
-                    // that didn't find a home
+                    // We wait to the end to remove any nodes
                     removalList.push(curFromNodeChild);
 
                     curFromNodeChild = fromNextSibling;
@@ -229,7 +330,7 @@ function morphdom(
                     fromEl.appendChild(matchingFromEl);
                     morphEl(matchingFromEl, curToNodeChild, false);
                 } else {
-                    addVirtualNode(curToNodeChild, fromEl);
+                    insertVirtualNodeBefore(curToNodeChild, null, fromEl);
                 }
 
                 curToNodeChild = toNextSibling;
@@ -251,51 +352,9 @@ function morphdom(
         }
     } // END: morphEl(...)
 
-    var morphedNode = fromNode;
-    var fromNodeType = morphedNode.nodeType;
-    var toNodeType = toNode.___nodeType;
-    var morphChildrenOnly = false;
-    var shouldMorphEl = true;
-    var newNode;
+    morphEl(fromNode, toNode, true);
 
-    // Handle the case where we are given two DOM nodes that are not
-    // compatible (e.g. <div> --> <span> or <div> --> TEXT)
-    if (fromNodeType == ELEMENT_NODE) {
-        if (toNodeType == ELEMENT_NODE) {
-            if (!compareNodeNames(fromNode, toNode)) {
-                newNode = toNode.___actualize(doc);
-                morphChildrenOnly = true;
-                removalList.push(fromNode);
-            }
-        } else {
-            // Going from an element node to a text or comment node
-            removalList.push(fromNode);
-            newNode = toNode.___actualize(doc);
-            shouldMorphEl = false;
-        }
-    } else if (fromNodeType == TEXT_NODE || fromNodeType == COMMENT_NODE) { // Text or comment node
-        if (toNodeType == fromNodeType) {
-            morphedNode.nodeValue = toNode.___nodeValue;
-            return morphedNode;
-        } else {
-            // Text node to something else
-            removalList.push(fromNode);
-            newNode = addVirtualNode(toNode);
-            shouldMorphEl = false;
-        }
-    }
-
-    if (shouldMorphEl === true) {
-        morphEl(newNode || morphedNode, toNode, morphChildrenOnly);
-    }
-
-    if (newNode) {
-        if (fromNode.parentNode) {
-            fromNode.parentNode.replaceChild(newNode, fromNode);
-        }
-    }
-
-    // We now need to loop over any keyed nodes that might need to be
+    // We now need to loop over any nodes that might need to be
     // removed. We only do the removal if we know that the keyed node
     // never found a match. When a keyed node is matched up we remove
     // it out of fromNodesLookup and we use fromNodesLookup to determine
@@ -318,8 +377,6 @@ function morphdom(
             }
         }
     }
-
-    return newNode || morphedNode;
 }
 
 module.exports = morphdom;

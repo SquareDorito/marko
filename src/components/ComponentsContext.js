@@ -2,7 +2,7 @@
 
 var ComponentDef = require('./ComponentDef');
 var componentsUtil = require('./util');
-
+var componentLookup = componentsUtil.___componentLookup;
 var beginComponent = require('./beginComponent');
 
 var EMPTY_OBJECT = {};
@@ -11,6 +11,7 @@ function GlobalComponentsContext(out) {
     this.___roots = [];
     this.___preserved = EMPTY_OBJECT;
     this.___preservedBodies = EMPTY_OBJECT;
+    this.___preservedComponents = EMPTY_OBJECT;
     this.___componentsById = {};
     this.___out = out;
     this.___rerenderComponent = undefined;
@@ -19,6 +20,9 @@ function GlobalComponentsContext(out) {
 }
 
 GlobalComponentsContext.prototype = {
+    get ___existingComponentLookup() {
+        return componentLookup;
+    },
     ___initComponents: function(doc) {
         var topLevelComponentDefs = null;
 
@@ -54,6 +58,13 @@ GlobalComponentsContext.prototype = {
             }
         }
         preserved[elId] = true;
+    },
+    ___preserveComponent: function(componentId) {
+        var preserved = this.___preservedComponents;
+        if (preserved === EMPTY_OBJECT) {
+            preserved = this.___preservedComponents = {};
+        }
+        preserved[componentId] = true;
     },
     ___nextRepeatedId: function(parentId, id) {
         var nextIdLookup = this.___nextIdLookup || (this.___nextIdLookup = {});

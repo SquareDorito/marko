@@ -10,7 +10,6 @@ var defaultDocument = vdom.___defaultDocument;
 
 var FLAG_FINISHED = 1;
 var FLAG_LAST_FIRED = 2;
-
 var EVENT_UPDATE = 'update';
 var EVENT_FINISH = 'finish';
 

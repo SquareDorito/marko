@@ -1,18 +1,21 @@
-var VNode = require('./VNode');
-var inherit = require('raptor-util/inherit');
+const VNode = require('./VNode');
+const inherit = require('raptor-util/inherit');
 
-var NS_XLINK = 'http://www.w3.org/1999/xlink';
-var ATTR_XLINK_HREF = 'xlink:href';
-var toString = String;
+const NS_XLINK = 'http://www.w3.org/1999/xlink';
+const ATTR_XLINK_HREF = 'xlink:href';
+const toString = String;
 
-var FLAG_IS_SVG = 1;
-var FLAG_IS_TEXTAREA = 2;
-var FLAG_SIMPLE_ATTRS = 4;
+const FLAG_IS_SVG = 1;
+const FLAG_IS_TEXTAREA = 2;
+const FLAG_SIMPLE_ATTRS = 4;
+const FLAG_PRESERVE = 8;
+// const FLAG_COMPONENT_START_NODE = 16;
+// const FLAG_COMPONENT_END_NODE = 32;
 
-var defineProperty = Object.defineProperty;
+const defineProperty = Object.defineProperty;
 
-var ATTR_HREF = 'href';
-var EMPTY_OBJECT = Object.freeze({});
+const ATTR_HREF = 'href';
+const EMPTY_OBJECT = Object.freeze({});
 
 function convertAttrValue(type, value) {
     if (value === true) {
@@ -60,7 +63,7 @@ function VElement(tagName, attrs, childCount, flags, props) {
     var constId, namespaceURI;
 
     if (props) {
-        constId = props.c;
+        constId = props.i;
     }
 
     if ((this.___flags = flags || 0)) {
@@ -180,6 +183,10 @@ VElement.prototype = {
         var value = this.___attributes[name];
         return value != null && value !== false;
     },
+
+    get ___isPreservedComponent() {
+        return (this.___flags & FLAG_PRESERVE) !== 0;
+    }
 };
 
 inherit(VElement, VNode);
@@ -234,6 +241,7 @@ VElement.___removePreservedAttributes = function(attrs) {
 };
 
 VElement.___morphAttrs = function(fromEl, toEl) {
+    fromEl = fromEl.___node || fromEl; // Handle the case if the node is a NodeProxy
 
     var removePreservedAttributes = VElement.___removePreservedAttributes;
 
@@ -308,6 +316,8 @@ VElement.___morphAttrs = function(fromEl, toEl) {
         }
         return;
     }
+
+    fromEl._vflags = flags;
 
     // In some cases we only want to set an attribute value for the first
     // render or we don't want certain attributes to be touched. To support

@@ -112,10 +112,13 @@ function collectNodes(rootNode) {
     var allNodes = [];
 
     function buildArrayHelper(node) {
-        allNodes.push(node);
         var curNode = node.firstChild;
+
         while(curNode) {
-            buildArrayHelper(curNode);
+            allNodes.push(curNode);
+            if (curNode.nodeType === 1) {
+                buildArrayHelper(curNode);
+            }
             curNode = curNode.nextSibling;
         }
     }
@@ -154,8 +157,8 @@ describe('morphdom', function() {
             let fromDocument = jsdom('<html><body>' + fromHTML + '</body></html>');
             let toDocument = jsdom('<html><body>' + toHTML + '</body></html>');
 
-            let fromNode = fromDocument.body.firstChild;
-            let toNode = toDocument.body.firstChild;
+            let fromNode = fromDocument.body;
+            let toNode = toDocument.body;
 
             var allFromNodes = collectNodes(fromNode);
             var elLookupBefore = buildElLookup(fromNode);
@@ -164,9 +167,10 @@ describe('morphdom', function() {
             var expectedHTML = serializeNode(toNode);
             fs.writeFileSync(path.join(dir, 'expected.html'), expectedHTML, { encoding: 'utf8' });
 
-            var morphedNode = morphdom(
+            morphdom(
                 fromNode,
                 targetVEl,
+                fromDocument,
                 {},
                 function onNodeAdded() {},
                 function onBeforeElUpdated(node) {
@@ -200,10 +204,10 @@ describe('morphdom', function() {
 
 
 
-            var actualHTML = serializeNode(morphedNode);
+            var actualHTML = serializeNode(fromNode);
             helpers.compare(actualHTML, '.html');
 
-            var elLookupAfter = buildElLookup(morphedNode);
+            var elLookupAfter = buildElLookup(fromNode);
 
             Object.keys(elLookupBefore).forEach(function(elId) {
                 var afterEl =  elLookupAfter[elId];
@@ -219,7 +223,7 @@ describe('morphdom', function() {
             });
 
             allFromNodes.forEach(function(node) {
-                if (node.$onNodeDiscarded && isNodeInTree(node, morphedNode)) {
+                if (node.$onNodeDiscarded && isNodeInTree(node, fromNode)) {
                     throw new Error('"from" node was reported as being discarded, but it still in the final DOM tree. Node: ' + serializeNode(node));
                 }
 

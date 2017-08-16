@@ -6,6 +6,7 @@ var defaultCreateOut = require('../runtime/createOut');
 var getComponentsContext = require('./ComponentsContext').___getComponentsContext;
 var componentsUtil = require('./util');
 var componentLookup = componentsUtil.___componentLookup;
+var commentNodeLookup = componentsUtil.___commentNodeLookup;
 var emitLifecycleEvent = componentsUtil.___emitLifecycleEvent;
 var destroyComponentForEl = componentsUtil.___destroyComponentForEl;
 var destroyElRecursive = componentsUtil.___destroyElRecursive;
@@ -36,7 +37,8 @@ function removeListener(removeEventListenerHandle) {
 }
 
 function checkCompatibleComponent(globalComponentsContext, el) {
-    var component = el._w;
+    // TODO THIS CODE NEEDS TO BE REWRITTEN DUE TO BOUNDARY CHANGES
+    var component = el._c;
     while(component) {
         var id = component.id;
         var newComponentDef = globalComponentsContext.___componentsById[id];
@@ -197,7 +199,11 @@ function onBeforeElChildrenUpdated(el, key, globalComponentsContext) {
 }
 
 function onNodeAdded(node, globalComponentsContext) {
-    eventDelegation.___handleNodeAttach(node, globalComponentsContext.___out);
+    if (node.nodeType === 8) {
+        commentNodeLookup[node.nodeValue] = node;
+    } else {
+        eventDelegation.___handleNodeAttach(node, globalComponentsContext.___out);
+    }
 }
 
 var componentProto;
@@ -212,7 +218,8 @@ function Component(id) {
     this.id = id;
     this.el = null;
     this.___state = null;
-    this.___roots = null;
+    this.___startNode = null;
+    this.___endNode = null;
     this.___subscriptions = null;
     this.___domEventListenerHandles = null;
     this.___bubblingDomEvents = null; // Used to keep track of bubbling DOM events for components rendered on the server
@@ -304,24 +311,11 @@ Component.prototype = componentProto = {
             return;
         }
 
-        var els = this.els;
-
         this.___destroyShallow();
 
-        var rootComponents = this.___rootComponents;
-        if (rootComponents) {
-            rootComponents.forEach(function(rootComponent) {
-                rootComponent.___destroy();
-            });
-        }
-
-        els.forEach(function(el) {
-            destroyElRecursive(el);
-
-            var parentNode = el.parentNode;
-            if (parentNode) {
-                parentNode.removeChild(el);
-            }
+        this.___forEachNode(function(rootNode) {
+            destroyElRecursive(rootNode);
+            rootNode.parentNode.removeChild(rootNode);
         });
     },
 
@@ -509,7 +503,7 @@ Component.prototype = componentProto = {
         if (!renderer) {
             throw TypeError();
         }
-        var fromEls = self.___getRootEls({});
+        var fromNode = self.___getBoundaryDocumentFragment();
         var doc = self.___document;
         var input = this.___renderInput || this.___input;
         var globalData = this.___global;
@@ -544,36 +538,15 @@ Component.prototype = componentProto = {
             if (isRerenderInBrowser !== true) {
                 var targetNode = out.___getOutput();
 
-                var fromEl;
-
-                var targetEl = targetNode.___firstChild;
-                while (targetEl) {
-                    var nodeName = targetEl.___nodeName;
-
-                    if (nodeName === 'HTML') {
-                        fromEl = document.documentElement;
-                    } else if (nodeName === 'BODY') {
-                        fromEl = document.body;
-                    } else if (nodeName === 'HEAD') {
-                        fromEl = document.head;
-                    } else {
-                        fromEl = fromEls[targetEl.id];
-                    }
-
-                    if (fromEl) {
-                        morphdom(
-                            fromEl,
-                            targetEl,
-                            globalComponentsContext,
-                            onNodeAdded,
-                            onBeforeElUpdated,
-                            onBeforeNodeDiscarded,
-                            onNodeDiscarded,
-                            onBeforeElChildrenUpdated);
-                    }
-
-                    targetEl = targetEl.___nextSibling;
-                }
+                morphdom(
+                    fromNode,
+                    targetNode,
+                    doc,
+                    globalComponentsContext,
+                    onNodeAdded,
+                    onBeforeNodeDiscarded,
+                    onNodeDiscarded,
+                    onBeforeElChildrenUpdated);
             }
 
             result.afterInsert(doc);
@@ -584,25 +557,132 @@ Component.prototype = componentProto = {
         this.___reset();
     },
 
-    ___getRootEls: function(rootEls) {
-        var i, len;
+    ___getBoundaryDocumentFragment: function() {
+        var parentNode = this.___startNode.parentNode;
 
-        var componentEls = this.els;
-
-        for (i=0, len=componentEls.length; i<len; i++) {
-            var componentEl = componentEls[i];
-            rootEls[componentEl.id] = componentEl;
+        function NodeProxy(node, parentNode) {
+            this.___node = node;
+            this.___nextSibling = null;
+            this.parentNode = parentNode;
         }
 
-        var rootComponents = this.___rootComponents;
-        if (rootComponents) {
-            for (i=0, len=rootComponents.length; i<len; i++) {
-                var rootComponent = rootComponents[i];
-                rootComponent.___getRootEls(rootEls);
+        NodeProxy.prototype = {
+            get id() {
+                return this.___node.id;
+            },
+
+            get nodeType() {
+                return this.___node.nodeType;
+            },
+
+            get nodeValue() {
+                return this.___node.nodeValue;
+            },
+
+            set nodeValue(newValue) {
+                this.___node.nodeValue = newValue;
+            },
+
+            get nodeName() {
+                return this.___node.nodeName;
+            },
+
+            get firstChild() {
+                return this.___node.firstChild;
+            },
+
+            get _vprops() {
+                return this.___node._vprops;
+            },
+
+            get _c() {
+                return this.___node._c;
+            },
+
+            get nextSibling() {
+                var nextSibling = this.___nextSibling;
+                if (nextSibling) {
+                    if (nextSibling.___node.parentNode !== parentNode) {
+                        // It's possible that a keyed node at the root might
+                        // proxy, and not the real node, we would still have the proxy
+                        // in our list. We need to skip over proxy nodes
+                        // that were moved elsewhere
+                        return nextSibling.nextSibling;
+                    } else {
+                        return nextSibling;
+                    }
+                }
+            },
+
+            insertBefore: function(newNode, referenceNode) {
+                this.___node.insertBefore(newNode, referenceNode);
             }
+        };
+
+        function BoundaryDocumentFragment(parentNode) {
+            this.firstChild = null;
+            this.___parentNode = parentNode;
         }
 
-        return rootEls;
+        BoundaryDocumentFragment.prototype = {
+            removeChild: function(nodeToRemove) {
+                var realNodeToRemove = nodeToRemove.___node;
+                var realParentNode = realNodeToRemove.parentNode;
+                realParentNode.removeChild(realNodeToRemove);
+                nodeToRemove.parentNode = null;
+            },
+
+            insertBefore: function(newNode, referenceNode) {
+                var realReferenceNode = referenceNode && referenceNode.___node;
+                this.___parentNode.insertBefore(newNode, realReferenceNode);
+
+                // TODO: It's possible that a keyed proxy node later in the list
+                //       might be moving to an earlier position in the list.
+                //       We need to skip over that node in nextSibling
+            },
+
+            appendChild: function(newNode) {
+                this.___parentNode.appendChild(newNode);
+            }
+        };
+
+        var boundaryDocumentFragment = new BoundaryDocumentFragment(parentNode);
+
+        var prevChild;
+
+        this.___forEachNode(function(node) {
+            var nodeProxy = new NodeProxy(node, boundaryDocumentFragment);
+
+            if (prevChild) {
+                prevChild.___nextSibling = nodeProxy;
+            } else {
+                boundaryDocumentFragment.firstChild = nodeProxy;
+            }
+
+            prevChild = nodeProxy;
+        });
+
+        return boundaryDocumentFragment;
+    },
+
+    ___detach: function() {
+        var fragment = this.___document.createDocumentFragment();
+        this.___forEachNode(fragment.appendChild.bind(fragment));
+        return fragment;
+    },
+
+    ___forEachNode: function(callback) {
+        var currentNode = this.___startNode;
+        var endNode = this.___endNode;
+
+        while(true) {
+            var nextSibling = currentNode.nextSibling;
+            callback(currentNode);
+            if (currentNode === endNode) {
+                break;
+            }
+            currentNode = nextSibling;
+        }
     },
 
     ___removeDOMEventListeners: function() {
@@ -646,17 +726,7 @@ componentProto.___destroy = componentProto.destroy;
 domInsert(
     componentProto,
     function getEl(component) {
-        var els = this.els;
-        var elCount = els.length;
-        if (elCount > 1) {
-            var fragment = component.___document.createDocumentFragment();
-            els.forEach(function(el) {
-                fragment.appendChild(el);
-            });
-            return fragment;
-        } else {
-            return els[0];
-        }
+        return component.___detach();
     },
     function afterInsert(component) {
         return component;

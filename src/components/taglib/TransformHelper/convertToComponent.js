@@ -3,6 +3,8 @@ const generateRegisterComponentCode = require('../util/generateRegisterComponent
 
 const START = 'START';
 const END = 'END';
+const FLAG_COMPONENT_START_NODE = 16;
+const FLAG_COMPONENT_END_NODE = 32;
 
 function buildIdNodeFromKey(key, builder) {
     const elIdMethod = builder.memberExpression(
@@ -12,7 +14,7 @@ function buildIdNodeFromKey(key, builder) {
     return builder.functionCall(elIdMethod, [key]);
 }
 
-function getBoundaryForNode(node, pos, builder) {
+function getBoundaryForNode(node, pos, builder, isVDOM) {
     const key = (node.type === 'HtmlElement' || node.type === 'CustomTag') && node.getAttributeValue('key');
     const id = node.type === 'HtmlElement' && node.getAttributeValue('id');
     const isKeyDynamic = key ? key.type !== 'Literal' : false;
@@ -35,6 +37,11 @@ function getBoundaryForNode(node, pos, builder) {
         node.removeAttribute('id');
         node.setAttributeValue('id', idVar);
         node.insertSiblingBefore(idVarNode);
+
+        if (isVDOM) {
+            // Associate the component ID with the start boundary node for DOM diffing purposes
+            node.setPropertyValue('c', builder.memberExpression(builder.identifier('__component'), builder.identifier('id')));
+        }
     } else {
         if (node.type === 'CustomTag') {
             if (key) {
@@ -43,11 +50,33 @@ function getBoundaryForNode(node, pos, builder) {
         } else {
             if (key) {
                 expressionNode = builder.literal('@' + key.value);
+
+                if (isVDOM) {
+                    // Associate the component ID with the start boundary node for DOM diffing purposes
+                    node.setPropertyValue('c', builder.memberExpression(builder.identifier('__component'), builder.identifier('id')));
+                }
             } else if (id) {
                 expressionNode = builder.literal('#' + id.value);
+
+                if (isVDOM) {
+                    // Associate the component ID with the start boundary node for DOM diffing purposes
+                    node.setPropertyValue('c', builder.memberExpression(builder.identifier('__component'), builder.identifier('id')));
+                }
+
             } else {
                 const keyName = pos === START ? '' : '$';
                 node.setAttributeValue('key', builder.literal(keyName));
+                if (isVDOM) {
+                    // Associate the component with the start boundary node for DOM diffing purposes.
+                    // The component ID will match the element's ID so we just set it
+                    // to true
+                    if (pos === START) {
+                        node.setPropertyValue('c', builder.literal(true));
+                    } else {
+                        node.setPropertyValue('c', builder.memberExpression(builder.identifier('__component'), builder.identifier('id')));
+                    }
+                }
+
                 expressionNode = builder.literal('@' + keyName);
             }
         }
@@ -63,10 +92,12 @@ function insertBoundaryNodes(rootNodes, context, builder) {
     let firstNode = rootNodes[0];
     let isDynamic = false;
     let startBoundary;
+    let isVDOM = context.outputType === 'vdom';
 
     if (firstNode.type === 'HtmlElement') {
-        startBoundary = getBoundaryForNode(firstNode, START, builder);
+        startBoundary = getBoundaryForNode(firstNode, START, builder, isVDOM);
         isDynamic = startBoundary.isDynamic;
+        firstNode.addRuntimeFlag(FLAG_COMPONENT_START_NODE);
     } else {
         const extraStart = builder.htmlComment([
             builder.literal('^'),
@@ -75,6 +106,7 @@ function insertBoundaryNodes(rootNodes, context, builder) {
         firstNode.insertSiblingBefore(extraStart);
         rootNodes.unshift(extraStart);
         firstNode = extraStart;
+        firstNode.setPropertyValue('c', builder.literal(true));
     }
 
     firstNode.setFlag('hasComponentBind');
@@ -86,6 +118,10 @@ function insertBoundaryNodes(rootNodes, context, builder) {
     let boundaryNode;
 
     if (isSingleRoot && startBoundary) {
+        // The first node is also the end boundary node. We need this information
+        // at runtime during DOM diffing/patching to efficiently diff components
+        firstNode.addRuntimeFlag(FLAG_COMPONENT_END_NODE);
+
         if (startBoundary.expression.type === 'Literal' && startBoundary.expression.value === '@') {
             // The default boundary is a single element with an ID that matches
             // the component ID so in this case there is no need to insert
@@ -96,7 +132,12 @@ function insertBoundaryNodes(rootNodes, context, builder) {
         }
     } else {
         if (lastNode.type === 'HtmlElement') {
-            endBoundary = getBoundaryForNode(lastNode, END, builder);
+            endBoundary = getBoundaryForNode(lastNode, END, builder, isVDOM);
+
+            // We flag this HTML element as the end boundary node for the
+            // component. We need this information at runtime during DOM
+            // diffing/patching to efficiently diff components
+            lastNode.addRuntimeFlag(FLAG_COMPONENT_END_NODE);
         } else {
             const extraEnd = builder.htmlComment([
                 builder.literal('$'),
@@ -122,7 +163,7 @@ function insertBoundaryNodes(rootNodes, context, builder) {
         boundaryNode = context.addStaticVar('marko_componentBoundary', boundaryNode);
     }
 
-    const lhs = builder.memberExpression(builder.identifier('__component'), builder.identifier('boundary'));
+    const lhs = builder.memberExpression(builder.identifier('__component'), builder.identifier('___boundary'));
     const assignment = builder.assignment(lhs, boundaryNode);
     lastNode.insertSiblingAfter(assignment);
 }

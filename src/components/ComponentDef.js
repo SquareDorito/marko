@@ -16,7 +16,8 @@ function ComponentDef(component, componentId, globalComponentsContext, component
     this.___component = component;
     this.id = componentId;
 
-    this.___roots =  null;            // IDs of root elements if there are multiple root elements
+
+    this.___boundary =  undefined;            // IDs of root elements if there are multiple root elements
     this.___children = null;          // An array of nested ComponentDef instances
     this.___domEvents = undefined;         // An array of DOM events that need to be added (in sets of three)
 
@@ -97,6 +98,10 @@ ComponentDef.prototype = {
 
     d: function(handlerMethodName, extraArgs) {
         return attachBubblingEvent(this, handlerMethodName, extraArgs);
+    },
+
+    get ___type() {
+        return this.___component.___type;
     }
 };
 
@@ -147,7 +152,7 @@ ComponentDef.___deserialize = function(o, types, globals, registry) {
 
     return {
         ___component: component,
-        ___roots: extra.r,
+        ___boundary: extra.r,
         ___domEvents: extra.d,
         ___willRerenderInBrowser: extra._ === 1
     };

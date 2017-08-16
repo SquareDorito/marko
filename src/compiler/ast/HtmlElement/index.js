@@ -62,9 +62,14 @@ class HtmlElement extends Node {
         this.selfClosed = def.selfClosed;
         this.dynamicAttributes = undefined;
         this.bodyOnlyIf = undefined;
+        this.runtimeFlags = 0;
 
         this.on('beforeGenerateCode', beforeGenerateCode);
         this.on('afterGenerateCode', afterGenerateCode);
+    }
+
+    addRuntimeFlag(value) {
+        this.runtimeFlags |= value;
     }
 
     generateHTMLCode(codegen) {

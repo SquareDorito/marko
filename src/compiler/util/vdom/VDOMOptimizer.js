@@ -89,11 +89,11 @@ function generateNodesForArray(nodes, context, options) {
     function generateStaticNode(node) {
         if (node.type === 'HtmlElementVDOM') {
             node.createElementId = context.helper('createElement');
+
+            node.setConstId(builder.functionCall(optimizerContext.nextConstIdFunc, []));
         }/* else {
             node.createTextId = context.importModule('marko_createText', 'marko/vdom/createText');
         }*/
-
-        node.nextConstId = builder.functionCall(optimizerContext.nextConstIdFunc, []);
 
         node.isStaticRoot = true;
         let staticNodeId = context.addStaticVar('marko_node' + (optimizerContext.nextNodeId++), node);
@@ -131,6 +131,7 @@ function generateNodesForArray(nodes, context, options) {
                 finalNodes.push(node);
             }
 
+            node.finalizeProperties(context);
         } else {
             finalNodes.push(node);
         }
