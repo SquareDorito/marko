@@ -7,8 +7,8 @@ var ELEMENT_NODE = 1;
 var TEXT_NODE = 3;
 var COMMENT_NODE = 8;
 
-const FLAG_COMPONENT_START_NODE = 16;
-const FLAG_COMPONENT_END_NODE = 32;
+var FLAG_COMPONENT_START_NODE = 16;
+var FLAG_COMPONENT_END_NODE = 32;
 
 function compareNodeNames(fromEl, toEl) {
     return fromEl.nodeName === toEl.___nodeName;
@@ -159,15 +159,13 @@ function morphdom(
                         fromComponent = context.___existingComponentLookup[toComponentId];
                         if (fromComponent) {
                             if (fromComponent.___type === toComponent.___type) {
-                                if (fromComponent.___startNode === curFromNodeChild) {
+                                if (fromComponent.___startNode !== curFromNodeChild) {
                                     // The "to" component does not match the "from" component,
                                     // but we found the matching from component elsewhere
                                     // in the DOM so let's move into place, but we first
                                     // make sure the types match
                                     fromEl.insertBefore(fromComponent.___detach(), curFromNodeChild);
                                     curFromNodeChild = fromComponent.___startNode;
-                                } else {
-                                    // Fall through to normal diffing/patching of the current component
                                 }
 
                                 isComponentPaired = true;

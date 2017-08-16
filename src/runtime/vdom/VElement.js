@@ -1,21 +1,21 @@
-const VNode = require('./VNode');
-const inherit = require('raptor-util/inherit');
+var VNode = require('./VNode');
+var inherit = require('raptor-util/inherit');
 
-const NS_XLINK = 'http://www.w3.org/1999/xlink';
-const ATTR_XLINK_HREF = 'xlink:href';
-const toString = String;
+var NS_XLINK = 'http://www.w3.org/1999/xlink';
+var ATTR_XLINK_HREF = 'xlink:href';
+var toString = String;
 
-const FLAG_IS_SVG = 1;
-const FLAG_IS_TEXTAREA = 2;
-const FLAG_SIMPLE_ATTRS = 4;
-const FLAG_PRESERVE = 8;
-// const FLAG_COMPONENT_START_NODE = 16;
-// const FLAG_COMPONENT_END_NODE = 32;
+var FLAG_IS_SVG = 1;
+var FLAG_IS_TEXTAREA = 2;
+var FLAG_SIMPLE_ATTRS = 4;
+var FLAG_PRESERVE = 8;
+// var FLAG_COMPONENT_START_NODE = 16;
+// var FLAG_COMPONENT_END_NODE = 32;
 
-const defineProperty = Object.defineProperty;
+var defineProperty = Object.defineProperty;
 
-const ATTR_HREF = 'href';
-const EMPTY_OBJECT = Object.freeze({});
+var ATTR_HREF = 'href';
+var EMPTY_OBJECT = Object.freeze({});
 
 function convertAttrValue(type, value) {
     if (value === true) {
