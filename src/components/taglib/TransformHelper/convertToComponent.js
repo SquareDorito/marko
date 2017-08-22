@@ -184,6 +184,8 @@ module.exports = function handleComponentBind(options) {
     let componentProps = options.componentProps || {};
     let rootNodes = options.rootNodes;
 
+    // console.log('ROOT NODES:', JSON.stringify(rootNodes, null, 4));
+
     insertBoundaryNodes(rootNodes, context, builder);
 
     var isSplit = false;

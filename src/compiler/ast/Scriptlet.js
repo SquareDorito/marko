@@ -9,6 +9,7 @@ class Scriptlet extends Node {
         this.code = def.code;
         this.tag = def.tag;
         this.block = def.block;
+        this.noOutput = true;
     }
 
     generateCode(codegen) {

@@ -7,7 +7,8 @@ const FLAG_IS_SVG = 1;
 const FLAG_IS_TEXTAREA = 2;
 const FLAG_SIMPLE_ATTRS = 4;
 // const FLAG_PRESERVE = 8;
-// const FLAG_COMPONENT_END_NODE = 16;
+// const FLAG_COMPONENT_START_NODE = 16;
+// const FLAG_COMPONENT_END_NODE = 32;
 
 function finalizeCreateArgs(createArgs, builder) {
     var length = createArgs.length;

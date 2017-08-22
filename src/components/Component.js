@@ -4,9 +4,9 @@
 var domInsert = require('../runtime/dom-insert');
 var defaultCreateOut = require('../runtime/createOut');
 var getComponentsContext = require('./ComponentsContext').___getComponentsContext;
+var commentNodeLookup = require('../runtime/vdom/vdom').___VComment.___commentNodeLookup;
 var componentsUtil = require('./util');
 var componentLookup = componentsUtil.___componentLookup;
-var commentNodeLookup = componentsUtil.___commentNodeLookup;
 var emitLifecycleEvent = componentsUtil.___emitLifecycleEvent;
 var destroyComponentForEl = componentsUtil.___destroyComponentForEl;
 var destroyElRecursive = componentsUtil.___destroyElRecursive;
@@ -34,26 +34,6 @@ var emit = EventEmitter.prototype.emit;
 
 function removeListener(removeEventListenerHandle) {
     removeEventListenerHandle();
-}
-
-function checkCompatibleComponent(globalComponentsContext, el) {
-    // TODO THIS CODE NEEDS TO BE REWRITTEN DUE TO BOUNDARY CHANGES
-    var component = el._c;
-    while(component) {
-        var id = component.id;
-        var newComponentDef = globalComponentsContext.___componentsById[id];
-        if (newComponentDef && component.___type == newComponentDef.___component.___type) {
-            break;
-        }
-
-        var rootFor = component.___rootFor;
-        if (rootFor)  {
-            component = rootFor;
-        } else {
-            component.___destroyShallow();
-            break;
-        }
-    }
 }
 
 function handleCustomEventWithMethodListener(component, targetMethodName, args, extraArgs) {
@@ -170,24 +150,6 @@ function onBeforeNodeDiscarded(node) {
     return eventDelegation.___handleNodeDetach(node);
 }
 
-function onBeforeElUpdated(fromEl, key, globalComponentsContext) {
-    if (key) {
-        var preserved = globalComponentsContext.___preserved[key];
-
-        if (preserved === true) {
-            // Don't morph elements that are associated with components that are being
-            // reused or elements that are being preserved. For components being reused,
-            // the morphing will take place when the reused component updates.
-            return MORPHDOM_SKIP;
-        } else {
-            // We may need to destroy a Component associated with the current element
-            // if a new UI component was rendered to the same element and the types
-            // do not match
-            checkCompatibleComponent(globalComponentsContext, fromEl);
-        }
-    }
-}
-
 function onBeforeElChildrenUpdated(el, key, globalComponentsContext) {
     if (key) {
         var preserved = globalComponentsContext.___preservedBodies[key];
@@ -199,10 +161,14 @@ function onBeforeElChildrenUpdated(el, key, globalComponentsContext) {
 }
 
 function onNodeAdded(node, globalComponentsContext) {
-    if (node.nodeType === 8) {
-        commentNodeLookup[node.nodeValue] = node;
-    } else {
+    if (node.nodeType === 1) {
         eventDelegation.___handleNodeAttach(node, globalComponentsContext.___out);
+    }
+}
+
+function removeCommentNodeFromLookup(node) {
+    if (node.nodeType === 8) {
+        delete commentNodeLookup[node.nodeValue.substring(1)];
     }
 }
 
@@ -339,6 +305,11 @@ Component.prototype = componentProto = {
         }
 
         delete componentLookup[this.id];
+
+        // We have to do some cleanup since we index comment nodes used
+        // as component boundaries
+        removeCommentNodeFromLookup(this.___startNode);
+        removeCommentNodeFromLookup(this.___endNode);
     },
 
     isDestroyed: function() {
@@ -503,7 +474,10 @@ Component.prototype = componentProto = {
         if (!renderer) {
             throw TypeError();
         }
-        var fromNode = self.___getBoundaryDocumentFragment();
+
+        var startNode = this.___startNode;
+        var endNode = this.___endNode.nextSibling;
+
         var doc = self.___document;
         var input = this.___renderInput || this.___input;
         var globalData = this.___global;
@@ -539,7 +513,8 @@ Component.prototype = componentProto = {
                 var targetNode = out.___getOutput();
 
                 morphdom(
-                    fromNode,
+                    startNode,
+                    endNode,
                     targetNode,
                     doc,
                     globalComponentsContext,
@@ -557,128 +532,26 @@ Component.prototype = componentProto = {
         this.___reset();
     },
 
-    ___getBoundaryDocumentFragment: function() {
-        var parentNode = this.___startNode.parentNode;
-
-        function NodeProxy(node, parentNode) {
-            this.___node = node;
-            this.___nextSibling = null;
-            this.parentNode = parentNode;
-        }
-
-        NodeProxy.prototype = {
-            get id() {
-                return this.___node.id;
-            },
-
-            get nodeType() {
-                return this.___node.nodeType;
-            },
-
-            get nodeValue() {
-                return this.___node.nodeValue;
-            },
-
-            set nodeValue(newValue) {
-                this.___node.nodeValue = newValue;
-            },
-
-            get nodeName() {
-                return this.___node.nodeName;
-            },
-
-            get firstChild() {
-                return this.___node.firstChild;
-            },
-
-            get _vprops() {
-                return this.___node._vprops;
-            },
-
-            get _c() {
-                return this.___node._c;
-            },
-
-            get nextSibling() {
-                var nextSibling = this.___nextSibling;
-                if (nextSibling) {
-                    if (nextSibling.___node.parentNode !== parentNode) {
-                        // It's possible that a keyed node at the root might
-                        // proxy, and not the real node, we would still have the proxy
-                        // in our list. We need to skip over proxy nodes
-                        // that were moved elsewhere
-                        return nextSibling.nextSibling;
-                    } else {
-                        return nextSibling;
-                    }
-                }
-            },
-
-            insertBefore: function(newNode, referenceNode) {
-                this.___node.insertBefore(newNode, referenceNode);
-            }
-        };
-
-        function BoundaryDocumentFragment(parentNode) {
-            this.firstChild = null;
-            this.___parentNode = parentNode;
-        }
-
-        BoundaryDocumentFragment.prototype = {
-            removeChild: function(nodeToRemove) {
-                var realNodeToRemove = nodeToRemove.___node;
-                var realParentNode = realNodeToRemove.parentNode;
-                realParentNode.removeChild(realNodeToRemove);
-                nodeToRemove.parentNode = null;
-            },
-
-            insertBefore: function(newNode, referenceNode) {
-                var realReferenceNode = referenceNode && referenceNode.___node;
-                this.___parentNode.insertBefore(newNode, realReferenceNode);
-
-                // TODO: It's possible that a keyed proxy node later in the list
-                //       might be moving to an earlier position in the list.
-                //       We need to skip over that node in nextSibling
-            },
-
-            appendChild: function(newNode) {
-                this.___parentNode.appendChild(newNode);
-            }
-        };
-
-        var boundaryDocumentFragment = new BoundaryDocumentFragment(parentNode);
-
-        var prevChild;
-
-        this.___forEachNode(function(node) {
-            var nodeProxy = new NodeProxy(node, boundaryDocumentFragment);
-
-            if (prevChild) {
-                prevChild.___nextSibling = nodeProxy;
-            } else {
-                boundaryDocumentFragment.firstChild = nodeProxy;
-            }
-
-            prevChild = nodeProxy;
-        });
-
-        return boundaryDocumentFragment;
-    },
-
     ___detach: function() {
         var fragment = this.___document.createDocumentFragment();
         this.___forEachNode(fragment.appendChild.bind(fragment));
         return fragment;
     },
 
+    get els() {
+        var els = [];
+        this.___forEachNode(els.push.bind(els));
+        return els;
+    },
+
     ___forEachNode: function(callback) {
         var currentNode = this.___startNode;
         var endNode = this.___endNode;
 
-        while(true) {
+        for(;;) {
             var nextSibling = currentNode.nextSibling;
             callback(currentNode);
-            if (currentNode === endNode) {
+            if (currentNode == endNode) {
                 break;
             }
             currentNode = nextSibling;

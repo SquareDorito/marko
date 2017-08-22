@@ -9,7 +9,6 @@ window.$MG = markoGlobal;
 var runtimeId = markoGlobal.uid++;
 
 var componentLookup = {};
-var commentNodesLookup = {};
 
 var defaultDocument = document;
 var EMPTY_OBJECT = {};
@@ -150,7 +149,6 @@ function getMarkoPropsFromEl(el) {
 }
 
 exports.___runtimeId = runtimeId;
-exports.___commentNodeLookup = commentNodesLookup;
 exports.___componentLookup = componentLookup;
 exports.___getComponentForEl = getComponentForEl;
 exports.___emitLifecycleEvent = emitLifecycleEvent;

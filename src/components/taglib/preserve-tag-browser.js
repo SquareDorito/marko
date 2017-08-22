@@ -19,12 +19,11 @@ module.exports = function render(input, out) {
                 // it while transforming the old DOM
 
                 if (!bodyOnly) {
-                    var tagName = existingEl.tagName;
                     // If we are preserving the entire DOM node (not just the body)
                     // then that means that we have need to render a placeholder to
                     // mark the target location. We can then replace the placeholder
                     // node with the existing DOM node
-                    out.element(tagName, { id: id });
+                    out.element('', { id: id }, 0, 8 /* FLAG_PRESERVE */);
                 }
 
                 globalComponentsContext.___preserveDOMNode(id, bodyOnly);

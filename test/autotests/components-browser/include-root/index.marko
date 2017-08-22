@@ -1,13 +1,13 @@
 class {
-    userSettings(e, el) {
-    	// do something
+    onClick() {
+    	this.clicked = true;
     }
 }
 
 <include('./modal.marko')>
     <@body>
-    	<li class="link" on-click('userSettings')>
-    	    <p>User Settings</p>
+    	<li>
+    	    <button type="button" key="button" on-click('onClick')>Test link</button>
     	</li>
     </@body>
 </include>

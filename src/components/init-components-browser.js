@@ -5,9 +5,9 @@ var win = window;
 var defaultDocument = document;
 var componentsUtil = require('./util');
 var componentLookup = componentsUtil.___componentLookup;
-var commentNodeLookup = componentsUtil.___commentNodeLookup;
 var getElementById = componentsUtil.___getElementById;
 var ComponentDef = require('./ComponentDef');
+var commentNodeLookup = require('../runtime/vdom/vdom').___VComment.___commentNodeLookup;
 var registry = require('./registry');
 var serverRenderedGlobals = {};
 var isArray = Array.isArray;
@@ -111,7 +111,6 @@ function initComponent(componentDef, doc) {
     }
 
     component.el = startNode;
-
     startNode._c = componentLookup[id] = component;
 
     component.___startNode = startNode;

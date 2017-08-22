@@ -75,6 +75,7 @@
     },
     "<import>": {
         "code-generator": "./import-tag",
+        "no-output": true,
         "parse-options": {
             "relaxRequireCommas": true
         }
@@ -167,6 +168,7 @@
     },
     "<static>": {
         "code-generator": "./static-tag",
+        "no-output": true,
         "parse-options": {
             "ignoreAttributes": true
         }

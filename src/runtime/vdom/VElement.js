@@ -8,7 +8,7 @@ var toString = String;
 var FLAG_IS_SVG = 1;
 var FLAG_IS_TEXTAREA = 2;
 var FLAG_SIMPLE_ATTRS = 4;
-var FLAG_PRESERVE = 8;
+// var FLAG_PRESERVE = 8;
 // var FLAG_COMPONENT_START_NODE = 16;
 // var FLAG_COMPONENT_END_NODE = 32;
 
@@ -182,10 +182,6 @@ VElement.prototype = {
         // different namespaces
         var value = this.___attributes[name];
         return value != null && value !== false;
-    },
-
-    get ___isPreservedComponent() {
-        return (this.___flags & FLAG_PRESERVE) !== 0;
     }
 };
 
@@ -241,8 +237,6 @@ VElement.___removePreservedAttributes = function(attrs) {
 };
 
 VElement.___morphAttrs = function(fromEl, toEl) {
-    fromEl = fromEl.___node || fromEl; // Handle the case if the node is a NodeProxy
-
     var removePreservedAttributes = VElement.___removePreservedAttributes;
 
     var attrs = toEl.___attributes;

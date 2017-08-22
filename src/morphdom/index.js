@@ -7,6 +7,10 @@ var ELEMENT_NODE = 1;
 var TEXT_NODE = 3;
 var COMMENT_NODE = 8;
 
+// var FLAG_IS_SVG = 1;
+// var FLAG_IS_TEXTAREA = 2;
+// var FLAG_SIMPLE_ATTRS = 4;
+var FLAG_PRESERVE = 8;
 var FLAG_COMPONENT_START_NODE = 16;
 var FLAG_COMPONENT_END_NODE = 32;
 
@@ -14,13 +18,13 @@ function compareNodeNames(fromEl, toEl) {
     return fromEl.nodeName === toEl.___nodeName;
 }
 
-
 function getElementById(doc, id) {
     return doc.getElementById(id);
 }
 
 function morphdom(
-        fromNode,
+        startNode,
+        endNode,
         toNode,
         doc,
         context,
@@ -53,11 +57,16 @@ function morphdom(
 
         var vCurChild = vNode.___firstChild;
         while (vCurChild) {
-            if (vCurChild.___isPreservedComponent === true) {
-                var fromComponent = context.___existingComponentLookup[vCurChild.id];
-                fromComponent.appendTo(parentEl);
+            var flags = vCurChild.___flags;
+            if (flags & FLAG_PRESERVE) {
+                if (flags & FLAG_COMPONENT_START_NODE) {
+                    var fromComponent = context.___existingComponentLookup[vCurChild.id];
+                    fromComponent.appendTo(realEl);
+                } else {
+                    realEl.appendChild(getElementById(doc, vCurChild.id));
+                }
             } else {
-                insertVirtualNodeBefore(vCurChild, null, parentEl);
+                insertVirtualNodeBefore(vCurChild, null, realEl);
             }
 
             vCurChild = vCurChild.___nextSibling;
@@ -106,10 +115,6 @@ function morphdom(
                 }
             }
 
-            if (context.___preserved[toElKey] === true) {
-                return;
-            }
-
             morphAttrs(fromEl, toEl);
         }
 
@@ -120,7 +125,7 @@ function morphdom(
 
         if (nodeName !== 'TEXTAREA') {
             var curToNodeChild = toEl.___firstChild;
-            var curFromNodeChild = fromEl.firstChild;
+            var curFromNodeChild = childrenOnly === true ? startNode : fromEl.firstChild;
             var curToNodeKey;
             var curFromNodeKey;
             var curToNodeType;
@@ -132,15 +137,19 @@ function morphdom(
             var toComponent;
             var toComponentId;
             var isComponentPaired;
+            var toNodeFlags;
 
             outer: while (curToNodeChild) {
                 toNextSibling = curToNodeChild.___nextSibling;
                 curToNodeKey = curToNodeChild.id;
                 curToNodeType = curToNodeChild.___nodeType;
                 isComponentPaired = false;
+                toComponentId = undefined;
 
                 if (curToNodeType === ELEMENT_NODE) {
-                    toComponentId = (curToNodeChild.___flags & FLAG_COMPONENT_START_NODE) !== 0 && curToNodeChild.___properties.c;
+                    toNodeFlags = curToNodeChild.___flags;
+
+                    toComponentId = (toNodeFlags & FLAG_COMPONENT_START_NODE) !== 0 && curToNodeChild.___properties.c;
                     if (toComponentId === true) {
                         toComponentId = curToNodeChild.id;
                     }
@@ -170,6 +179,10 @@ function morphdom(
 
                                 isComponentPaired = true;
                             } else {
+                                if (fromComponent.___startNode !== curFromNodeChild) {
+                                    curFromNodeChild = fromComponent.___endNode.nextSibling;
+                                }
+
                                 curToNodeChild = insertVirtualComponentBefore(curToNodeChild, toComponentId, curFromNodeChild, fromEl);
                                 fromComponent.destroy();
                                 continue;
@@ -179,32 +192,47 @@ function morphdom(
                             continue;
                         }
                     }
-                } else if (curToNodeKey && curToNodeChild.___isPreservedComponent === true) {
-                    // We have found a marker that indicates that a component
-                    // at the current location in the target VDOM is to be
-                    // preserved. If the current DOM node in the original tree
-                    // happens to be the start boundary for the preserved UI
-                    // component then we just need to skip over those nodes.
-                    // If not, then we need to move the component's nodes into
-                    // this location
+                } else if (curToNodeKey && toNodeFlags & FLAG_PRESERVE) {
                     curToNodeChild = toNextSibling; // Skip over the preserve marker
 
-                    fromComponent = context.___existingComponentLookup[curToNodeKey];
+                    if (toNodeFlags & FLAG_COMPONENT_START_NODE) {
+                        // We have found a marker that indicates that a component
+                        // at the current location in the target VDOM is to be
+                        // preserved. If the current DOM node in the original tree
+                        // happens to be the start boundary for the preserved UI
+                        // component then we just need to skip over those nodes.
+                        // If not, then we need to move the component's nodes into
+                        // this location
+                        fromComponent = context.___existingComponentLookup[curToNodeKey];
 
-                    if (fromComponent.___startNode === curFromNodeChild) {
-                        // Perfect match! Now just need to skip over all of the
-                        // nodes associated with the component. We have already
-                        // skipped over the target node
-                        curFromNodeChild = fromComponent.___endNode.nextSibling;
+                        if (fromComponent.___startNode === curFromNodeChild) {
+                            // Perfect match! Now just need to skip over all of the
+                            // nodes associated with the component. We have already
+                            // skipped over the target node
+                            curFromNodeChild = fromComponent.___endNode.nextSibling;
+                        } else {
+                            // We move the matching component's nodes into the proper
+                            // location
+                            fromEl.insertBefore(fromComponent.___detach(), curFromNodeChild);
+                        }
                     } else {
-                        // We move the matching component's nodes into the proper
-                        // location
-                        fromEl.insertBefore(fromComponent.___detach(), curFromNodeChild);
+                        // We are just preserving the HTML element
+                        if (curFromNodeChild && curFromNodeChild.id === curToNodeKey) {
+                            // Perfect match for the preserved element so continue
+                            curFromNodeChild = curFromNodeChild.nextSibling;
+                        } else {
+                            // We need to move the preserved DOM node into this position
+                            fromEl.insertBefore(getElementById(doc, curToNodeKey), curFromNodeChild);
+                        }
                     }
+
                     continue;
                 }
 
                 while (curFromNodeChild) {
+                    if (childrenOnly === true && curFromNodeChild === endNode) {
+                        break;
+                    }
                     if (!isComponentPaired && (fromComponent = curFromNodeChild._c)) {
                         // The current "to" element is not associated with a component,
                         // but the current "from" element is associated with a component
@@ -314,8 +342,10 @@ function morphdom(
                         continue outer;
                     }
 
-                    // We wait to the end to remove any nodes
-                    removalList.push(curFromNodeChild);
+                    if (!context.___preserved[curFromNodeKey]) {
+                        // We wait to the end to remove any nodes
+                        removalList.push(curFromNodeChild);
+                    }
 
                     curFromNodeChild = fromNextSibling;
                 }
@@ -328,19 +358,21 @@ function morphdom(
                     fromEl.appendChild(matchingFromEl);
                     morphEl(matchingFromEl, curToNodeChild, false);
                 } else {
-                    insertVirtualNodeBefore(curToNodeChild, null, fromEl);
+                    insertVirtualNodeBefore(curToNodeChild, fromNextSibling, fromEl);
                 }
 
                 curToNodeChild = toNextSibling;
                 curFromNodeChild = fromNextSibling;
             }
 
-            // We have processed all of the "to nodes". If curFromNodeChild is
-            // non-null then we still have some from nodes left over that need
-            // to be removed
-            while (curFromNodeChild) {
-                removalList.push(curFromNodeChild);
-                curFromNodeChild = curFromNodeChild.nextSibling;
+            if (childrenOnly === false || endNode === null || curFromNodeChild !== endNode) {
+                // We have processed all of the "to nodes". If curFromNodeChild is
+                // non-null then we still have some from nodes left over that need
+                // to be removed
+                while (curFromNodeChild) {
+                    removalList.push(curFromNodeChild);
+                    curFromNodeChild = curFromNodeChild.nextSibling;
+                }
             }
         }
 
@@ -350,7 +382,7 @@ function morphdom(
         }
     } // END: morphEl(...)
 
-    morphEl(fromNode, toNode, true);
+    morphEl(startNode.parentNode, toNode, true);
 
     // We now need to loop over any nodes that might need to be
     // removed. We only do the removal if we know that the keyed node
@@ -362,7 +394,7 @@ function morphdom(
         var key = node.id;
         if (!key || foundKeys[key] === undefined) {
             var parentNode = node.parentNode;
-            if (parentNode !== null || node === fromNode) {
+            if (parentNode !== null) {
                 if (onBeforeNodeDiscarded(node) == false) {
                     continue;
                 }
