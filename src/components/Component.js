@@ -8,7 +8,6 @@ var commentNodeLookup = require('../runtime/vdom/vdom').___VComment.___commentNo
 var componentsUtil = require('./util');
 var componentLookup = componentsUtil.___componentLookup;
 var emitLifecycleEvent = componentsUtil.___emitLifecycleEvent;
-var destroyComponentForEl = componentsUtil.___destroyComponentForEl;
 var destroyElRecursive = componentsUtil.___destroyElRecursive;
 var getElementById = componentsUtil.___getElementById;
 var EventEmitter = require('events-light');
@@ -20,8 +19,6 @@ var morphdom = require('../morphdom');
 var eventDelegation = require('./event-delegation');
 
 var slice = Array.prototype.slice;
-
-var MORPHDOM_SKIP = true;
 
 var COMPONENT_SUBSCRIBE_TO_OPTIONS;
 var NON_COMPONENT_SUBSCRIBE_TO_OPTIONS = {
@@ -140,24 +137,8 @@ function checkInputChanged(existingComponent, oldInput, newInput) {
     return false;
 }
 
-function onNodeDiscarded(node) {
-    if (node.nodeType === 1) {
-        destroyComponentForEl(node);
-    }
-}
-
 function onBeforeNodeDiscarded(node) {
     return eventDelegation.___handleNodeDetach(node);
-}
-
-function onBeforeElChildrenUpdated(el, key, globalComponentsContext) {
-    if (key) {
-        var preserved = globalComponentsContext.___preservedBodies[key];
-        if (preserved === true) {
-            // Don't morph the children since they are preserved
-            return MORPHDOM_SKIP;
-        }
-    }
 }
 
 function onNodeAdded(node, globalComponentsContext) {
@@ -519,9 +500,7 @@ Component.prototype = componentProto = {
                     doc,
                     globalComponentsContext,
                     onNodeAdded,
-                    onBeforeNodeDiscarded,
-                    onNodeDiscarded,
-                    onBeforeElChildrenUpdated);
+                    onBeforeNodeDiscarded);
             }
 
             result.afterInsert(doc);

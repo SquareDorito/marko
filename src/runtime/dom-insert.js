@@ -1,6 +1,6 @@
 var extend = require('raptor-util/extend');
 var componentsUtil = require('../components/util');
-var destroyComponentForEl = componentsUtil.___destroyComponentForEl;
+var destroyComponentForNode = componentsUtil.___destroyComponentForNode;
 var destroyElRecursive = componentsUtil.___destroyElRecursive;
 
 function resolveEl(el) {
@@ -16,7 +16,7 @@ function resolveEl(el) {
 
 function beforeRemove(referenceEl) {
     destroyElRecursive(referenceEl);
-    destroyComponentForEl(referenceEl);
+    destroyComponentForNode(referenceEl);
 }
 
 module.exports = function(target, getEl, afterInsert) {
@@ -47,9 +47,7 @@ module.exports = function(target, getEl, afterInsert) {
             var curChild = referenceEl.firstChild;
             while(curChild) {
                 var nextSibling = curChild.nextSibling; // Just in case the DOM changes while removing
-                if (curChild.nodeType == 1) {
-                    beforeRemove(curChild);
-                }
+                beforeRemove(curChild);
                 curChild = nextSibling;
             }
 

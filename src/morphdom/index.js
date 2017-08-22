@@ -1,6 +1,9 @@
 'use strict';
 var specialElHandlers = require('./specialElHandlers');
-
+var componentsUtil = require('../components/util');
+var existingComponentLookup = componentsUtil.___componentLookup;
+var destroyComponentForNode = componentsUtil.___destroyComponentForNode;
+var destroyElRecursive = componentsUtil.___destroyElRecursive;
 var morphAttrs = require('../runtime/vdom/VElement').___morphAttrs;
 
 var ELEMENT_NODE = 1;
@@ -29,48 +32,45 @@ function morphdom(
         doc,
         context,
         onNodeAdded,
-        onBeforeNodeDiscarded,
-        onNodeDiscarded,
-        onBeforeElChildrenUpdated
+        onBeforeNodeDiscarded
     ) {
 
-    // This object is used as a lookup to quickly find all keyed elements in the original DOM tree.
     var removalList = [];
     var foundKeys = {};
-
-    function walkDiscardedChildNodes(node) {
-        onNodeDiscarded(node);
-        var curChild = node.firstChild;
-
-        while (curChild) {
-            walkDiscardedChildNodes(curChild);
-            curChild = curChild.nextSibling;
-        }
-    }
-
 
     function insertVirtualNodeBefore(vNode, referenceEl, parentEl) {
         var realEl = vNode.___actualize(doc);
         parentEl.insertBefore(realEl, referenceEl);
 
-        onNodeAdded(realEl, context);
+        var id = vNode.id;
+        if (id && context.___preservedBodies[id]) {
+            // Move the preserved children over to the new parent
+            var existingParent = getElementById(doc, id);
+            var existingChildNodes = existingParent.childNodes;
 
-        var vCurChild = vNode.___firstChild;
-        while (vCurChild) {
-            var flags = vCurChild.___flags;
-            if (flags & FLAG_PRESERVE) {
-                if (flags & FLAG_COMPONENT_START_NODE) {
-                    var fromComponent = context.___existingComponentLookup[vCurChild.id];
-                    fromComponent.appendTo(realEl);
-                } else {
-                    realEl.appendChild(getElementById(doc, vCurChild.id));
-                }
-            } else {
-                insertVirtualNodeBefore(vCurChild, null, realEl);
+            while (existingChildNodes.length) {
+                parentEl.appendChild(existingChildNodes[0]);
             }
+        } else {
+            var vCurChild = vNode.___firstChild;
+            while (vCurChild) {
+                var flags = vCurChild.___flags;
+                if (flags & FLAG_PRESERVE) {
+                    if (flags & FLAG_COMPONENT_START_NODE) {
+                        var fromComponent = existingComponentLookup[vCurChild.id];
+                        fromComponent.appendTo(realEl);
+                    } else {
+                        realEl.appendChild(getElementById(doc, vCurChild.id));
+                    }
+                } else {
+                    insertVirtualNodeBefore(vCurChild, null, realEl);
+                }
 
-            vCurChild = vCurChild.___nextSibling;
+                vCurChild = vCurChild.___nextSibling;
+            }
         }
+
+        onNodeAdded(realEl, context);
     }
 
     function insertVirtualComponentBefore(vNode, componentId, referenceNode, referenceNodeParentEl) {
@@ -91,7 +91,7 @@ function morphdom(
                 }
             }
             vNode = vNode.___nextSibling;
-        } while(curComponentId !== componentId);
+        } while (curComponentId !== componentId);
 
         return vNode;
     }
@@ -119,7 +119,8 @@ function morphdom(
         }
 
 
-        if (onBeforeElChildrenUpdated(fromEl, toElKey, context) === true) {
+        if (toElKey && context.___preservedBodies[toElKey] === true) {
+            // Don't morph the children since they are preserved
             return;
         }
 
@@ -165,7 +166,7 @@ function morphdom(
                     // We take a look at the target node to see if it is also
                     // associated with a UI component.
                     if (curFromNodeChild) {
-                        fromComponent = context.___existingComponentLookup[toComponentId];
+                        fromComponent = existingComponentLookup[toComponentId];
                         if (fromComponent) {
                             if (fromComponent.___type === toComponent.___type) {
                                 if (fromComponent.___startNode !== curFromNodeChild) {
@@ -192,7 +193,7 @@ function morphdom(
                             continue;
                         }
                     }
-                } else if (curToNodeKey && toNodeFlags & FLAG_PRESERVE) {
+                } else if (curToNodeKey && (toNodeFlags & FLAG_PRESERVE)) {
                     curToNodeChild = toNextSibling; // Skip over the preserve marker
 
                     if (toNodeFlags & FLAG_COMPONENT_START_NODE) {
@@ -203,7 +204,7 @@ function morphdom(
                         // component then we just need to skip over those nodes.
                         // If not, then we need to move the component's nodes into
                         // this location
-                        fromComponent = context.___existingComponentLookup[curToNodeKey];
+                        fromComponent = existingComponentLookup[curToNodeKey];
 
                         if (fromComponent.___startNode === curFromNodeChild) {
                             // Perfect match! Now just need to skip over all of the
@@ -400,10 +401,10 @@ function morphdom(
                 }
 
                 if (parentNode !== null) {
+                    destroyComponentForNode(node);
+                    destroyElRecursive(node);
                     parentNode.removeChild(node);
                 }
-
-                walkDiscardedChildNodes(node);
             }
         }
     }

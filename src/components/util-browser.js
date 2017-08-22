@@ -1,12 +1,6 @@
-var extend = require('raptor-util/extend');
 
-var markoGlobal = extend(window.$MG, {
-  uid: 0
-});
-
-window.$MG = markoGlobal;
-
-var runtimeId = markoGlobal.uid++;
+var markoUID = window.$MUID || (window.$MUID = { i: 0 });
+var runtimeId = markoUID.i++;
 
 var componentLookup = {};
 
@@ -69,25 +63,18 @@ function emitLifecycleEvent(component, eventType, eventArg1, eventArg2) {
     component.emit(eventType, eventArg1, eventArg2);
 }
 
-function destroyComponentForEl(el) {
+function destroyComponentForNode(el) {
     var componentToDestroy = el._c;
     if (componentToDestroy) {
         componentToDestroy.___destroyShallow();
         el._c = null;
-
-        while ((componentToDestroy = componentToDestroy.___rootFor)) {
-            componentToDestroy.___rootFor = null;
-            componentToDestroy.___destroyShallow();
-        }
     }
 }
 function destroyElRecursive(el) {
     var curChild = el.firstChild;
     while(curChild) {
-        if (curChild.nodeType === 1) {
-            destroyComponentForEl(curChild);
-            destroyElRecursive(curChild);
-        }
+        destroyComponentForNode(curChild);
+        destroyElRecursive(curChild);
         curChild = curChild.nextSibling;
     }
 }
@@ -97,7 +84,7 @@ function nextComponentId() {
     // marko runtimes. This allows multiple instances of marko to be
     // loaded in the same window and they should all place nice
     // together
-    return 'b' + ((markoGlobal.uid)++);
+    return 'b' + (markoUID.i++);
 }
 
 function nextComponentIdProvider(out) {
@@ -152,7 +139,7 @@ exports.___runtimeId = runtimeId;
 exports.___componentLookup = componentLookup;
 exports.___getComponentForEl = getComponentForEl;
 exports.___emitLifecycleEvent = emitLifecycleEvent;
-exports.___destroyComponentForEl = destroyComponentForEl;
+exports.___destroyComponentForNode = destroyComponentForNode;
 exports.___destroyElRecursive = destroyElRecursive;
 exports.___nextComponentIdProvider = nextComponentIdProvider;
 exports.___getElementById = getElementById;

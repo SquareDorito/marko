@@ -4,7 +4,7 @@ var getEventFromEl = eventDelegation.___getEventFromEl;
 
 var componentsUtil = require('./util');
 var destroyElRecursive = componentsUtil.___destroyElRecursive;
-var destroyComponentForEl = componentsUtil.___destroyComponentForEl;
+var destroyComponentForNode = componentsUtil.___destroyComponentForNode;
 
 function handleNodeAttach(node, out) {
     if (node.nodeType === 1) {
@@ -39,7 +39,7 @@ function handleNodeDetach(node) {
             delegateEvent(node, target, {
                 preventDefault: function() {
                     allowDetach = false;
-                    destroyComponentForEl(node);
+                    destroyComponentForNode(node);
                     destroyElRecursive(node);
                 },
                 detach: function() {
